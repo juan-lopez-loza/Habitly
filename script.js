@@ -196,10 +196,12 @@ function updateDayHeader() {
   if (isToday(selectedDate)) {
     badge.textContent = 'Aujourd\'hui';
     badge.className   = 'day-mode-badge is-today';
+    if (prog.pct === 100) badge.className   = 'day-mode-badge is-today is-completed';
   } else {
     const d = new Date(selectedDate + 'T00:00:00');
     badge.textContent = d.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
     badge.className   = 'day-mode-badge is-past';
+    if (prog.pct === 100) badge.className   = 'day-mode-badge is-past is-completed';
   }
 
   main.textContent = `${prog.done} / ${prog.total}`;

@@ -264,8 +264,19 @@ body {
   background: rgba(255,107,107,0.08);
 }
 
+.day-mode-badge.is-today.is-completed {
+  color: rgb(6, 214, 160) !important;
+  border-color: rgb(6, 214, 160) !important;
+  background: rgba(255,107,107,0.08);
+}
+
 .day-mode-badge.is-past {
   color: var(--text-faint);
+}
+
+.day-mode-badge.is-past.is-completed {
+  color: var(--text-faint);
+  border-color: rgb(6, 214, 160) !important;
 }
 
 .day-progress-wrap {
