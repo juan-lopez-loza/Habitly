@@ -147,6 +147,7 @@ function renderTimeline() {
     pill.className = 'day-pill';
     if (isToday(dateStr)) pill.classList.add('today');
     if (dateStr === selectedDate) pill.classList.add('selected');
+    if (prog.pct === 100) pill.classList.add('is-completed');
     pill.dataset.date = dateStr;
     pill.title = formatDisplayDate(dateStr);
 
@@ -154,7 +155,7 @@ function renderTimeline() {
       <span class="day-pill-name">${dayName}</span>
       <span class="day-pill-num">${dayNum}</span>
       <div class="day-pill-arc">
-        <div class="day-pill-arc-fill" style="width:${prog.pct}%"></div>
+        <div class="day-pill-arc-fill ${prog.pct === 100 ? 'is-completed' : ''}" style="width:${prog.pct}%"></div>
       </div>`;
 
     pill.addEventListener('click', () => selectDate(dateStr));

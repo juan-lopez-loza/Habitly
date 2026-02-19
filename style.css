@@ -135,6 +135,10 @@ body {
   user-select: none;
 }
 
+.day-pill.is-completed {
+  border-color: rgb(6, 214, 160) !important;
+}
+
 .day-pill:hover {
   background: var(--surface2);
   border-color: var(--border2);
@@ -193,6 +197,14 @@ body {
   position: absolute;
   left: 0; top: 0; bottom: 0;
   background: var(--accent);
+  border-radius: 99px;
+  transition: width 0.4s var(--ease);
+}
+
+.day-pill-arc-fill.is-completed {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: rgb(6, 214, 160) !important;
   border-radius: 99px;
   transition: width 0.4s var(--ease);
 }
