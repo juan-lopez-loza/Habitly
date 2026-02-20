@@ -112,6 +112,26 @@ function clearAuthError() {
   if (el) el.textContent = '';
 }
 
+function initProfileListeners() {
+  document.getElementById('profileBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('profileDropdown').classList.toggle('open');
+  })
+  document.addEventListener('click', (e) => {
+    document.getElementById('profileDropdown').classList.remove('open');
+  })
+
+  document.getElementById('deconnectBtn').addEventListener('click', async () => {
+    await supabaseClient.auth.signOut();
+  })
+
+  document.getElementById('deleteProfileBtn').addEventListener('click', async () => {
+    if (!confirm('Supprimer définitivement ton compte et toutes tes données ?')) return;
+    await resetData();
+    await supabaseClient.rpc('delete_user');
+  })
+}
+
 // =============================================
 // STORAGE — Supabase
 // =============================================
@@ -756,6 +776,15 @@ async function startApp() {
   selectedDate = today();
 
   await loadData();
+
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  const parts = user.email.split('@')[0].split('.');
+  const initials = parts.length >= 2
+      ? parts[0][0].toUpperCase() + parts[1][0].toUpperCase()
+      : parts[0].slice(0, 2).toUpperCase();
+  document.getElementById('profileBtn').textContent = initials;
+
+  initProfileListeners();
 
   // Boutons principaux
   document.getElementById('addHabitBtn').addEventListener('click', () => openModal());
