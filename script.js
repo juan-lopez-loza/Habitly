@@ -628,7 +628,7 @@ function importData(file) {
       const data = JSON.parse(e.target.result);
       if (!Array.isArray(data.habits)) throw 0;
       habits = data.habits; logs = data.logs || {};
-      saveData(); refreshAll();
+      refreshAll();
       showToast('Import réussi ✓');
     } catch { showToast('Erreur : fichier invalide ✗'); }
   };
@@ -638,7 +638,7 @@ function importData(file) {
 function resetData() {
   if (!confirm('Supprimer TOUTES les données ? Action irréversible.')) return;
   habits = []; logs = {};
-  saveData(); refreshAll();
+  refreshAll();
   showToast('Données réinitialisées');
 }
 
