@@ -8,8 +8,8 @@
 // =============================================
 
 const supabaseClient = supabase.createClient(
-    'https://xyzcompany.supabase.co',   // 🔁 Remplace par ton URL Supabase
-    'ta-anon-key'                        // 🔁 Remplace par ta clé anon/public
+    'https://xyzcompany.supabase.co',
+    'sb_publishable_WU6oL-y3kgs_uGYNr0f6dg_vBuLre_F'
 );
 
 // =============================================
