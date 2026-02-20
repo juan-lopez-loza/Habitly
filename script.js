@@ -242,7 +242,7 @@ function updateDayHeader() {
 // RENDER HABITS
 // =============================================
 
-function renderHabits() {
+async function renderHabits() {
   const container = document.getElementById('habitsContainer');
   const isPast    = !isToday(selectedDate);
 
@@ -317,30 +317,38 @@ function renderHabits() {
 
   // Events
   container.querySelectorAll('.check-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async() => {
       if (!isToday(selectedDate)) return; // sécurité (past-view désactive déjà visuellement)
       const cur = getLogForDate(btn.dataset.id, selectedDate);
-      setLog(btn.dataset.id, cur === true ? false : true, selectedDate);
+      const newValue = cur === true ? false : true;
+      await setLog(btn.dataset.id, newValue, selectedDate);
+      await loadData();
       refreshAll();
     });
   });
 
   container.querySelectorAll('.counter-inc').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async() => {
       if (!isToday(selectedDate)) return;
-      const cur = typeof getLogForDate(btn.dataset.id, selectedDate) === 'number'
-        ? getLogForDate(btn.dataset.id, selectedDate) : 0;
-      setLog(btn.dataset.id, cur + 1, selectedDate);
+      const id = btn.dataset.id;
+      const cur = typeof getLogForDate(id, selectedDate) === 'number' ? getLogForDate(id, selectedDate) : 0;
+      const next = cur + 1;
+      if (!logs[selectedDate]) logs[selectedDate] = {};
+      logs[id][selectedDate] = next;
+      refreshAll();
+      await setLog(id, next, selectedDate);
+      await loadData();
       refreshAll();
     });
   });
 
   container.querySelectorAll('.counter-dec').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       if (!isToday(selectedDate)) return;
       const cur = typeof getLogForDate(btn.dataset.id, selectedDate) === 'number'
         ? getLogForDate(btn.dataset.id, selectedDate) : 0;
-      if (cur > 0) setLog(btn.dataset.id, cur - 1, selectedDate);
+      if (cur > 0) await setLog(btn.dataset.id, cur - 1, selectedDate);
+      await loadData();
       refreshAll();
     });
   });
@@ -676,6 +684,10 @@ function refreshAll() {
 // =============================================
 
 async function init() {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) return;
+
   await loadData();
   selectedDate = today();
 
