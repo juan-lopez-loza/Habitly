@@ -1,6 +1,7 @@
 /**
  * HABITLY — script.js
- * Version corrigée avec Supabase
+ * Juan Lopez Loza
+ * 19/02/2026
  */
 
 // =============================================

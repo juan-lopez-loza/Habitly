@@ -1,7 +1,8 @@
-/* =========================================
-   HABITLY — style.css  (v2)
-   Dark minimal · Two-column desktop layout
-   ========================================= */
+/**
+ * HABITLY — style.css
+ * Juan Lopez Loza
+ * 19/02/2026
+ */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
