@@ -24,6 +24,7 @@ let selectedDate  = today();
 let selectedColor = '#FF6B6B';
 let selectedType  = 'check';
 let isSignUpMode  = false;
+let profileListenersInitialized = false;
 
 // =============================================
 // UTILS DATE
@@ -113,6 +114,9 @@ function clearAuthError() {
 }
 
 function initProfileListeners() {
+  if (profileListenersInitialized) return;
+  profileListenersInitialized = true;
+
   document.getElementById('profileBtn').addEventListener('click', (e) => {
     e.stopPropagation();
     document.getElementById('profileDropdown').classList.toggle('open');
@@ -824,7 +828,7 @@ async function startApp() {
 // =============================================
 
 async function init() {
-  // Branche le formulaire auth en premier (toujours disponible)
+  // Branche le formulaire auth en premier
   initAuthListeners();
 
   // Vérifie s'il existe déjà une session active
@@ -840,9 +844,12 @@ async function init() {
   // Écoute les changements de session (déconnexion, expiration...)
   supabaseClient.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_OUT') {
+      profileListenersInitialized = false;
       document.getElementById('authSection').style.display = 'flex';
       document.getElementById('appSection').style.display  = 'none';
       habits = []; logs = {};
+      // reload la page pour pouvoir se déconecter à nouveau
+      location.reload();
     }
   });
 }
