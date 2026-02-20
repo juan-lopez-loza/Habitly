@@ -44,11 +44,6 @@ function isToday(dateStr) {
 // STORAGE
 // =============================================
 
-function saveData() {
-  localStorage.setItem('habitly_habits', JSON.stringify(habits));
-  localStorage.setItem('habitly_logs',   JSON.stringify(logs));
-}
-
 async function loadData() {
   const { data: habitsData } = await supabase.from('habits').select('*');
   if (habitsData) habits = habitsData;
