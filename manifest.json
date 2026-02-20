@@ -1,5 +1,7 @@
 {
   "name": "Habitly",
+  "start_url": "/",
+  "display": "standalone",
   "icons": [
     {
       "src": "icons/icon.png",
