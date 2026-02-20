@@ -571,31 +571,45 @@ function syncColorSwatches() {
 // CRUD
 // =============================================
 
-function saveHabit(e) {
+async function saveHabit(e) {
   e.preventDefault();
   const name = document.getElementById('habitName').value.trim();
   if (!name) return;
   const goal = parseInt(document.getElementById('counterGoal').value) || 1;
 
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user){
+    showToast('Erreur', 'session expirée');
+    return;
+  }
+
+  const newHabit = {name: name, goal: goal, color: selectedColor, type: selectedType, user_id: user.id};
+
   if (editingId) {
-    const h = habits.find(h => h.id === editingId);
-    if (h) Object.assign(h, { name, color: selectedColor, type: selectedType, goal });
+    await supabase.from('habits').update(newHabit).eq('id', editingId)
     showToast('Habitude modifiée ✓');
   } else {
-    habits.push({ id: crypto.randomUUID(), name, color: selectedColor, type: selectedType, goal, createdAt: today() });
+    await supabase.from('habits').insert(newHabit)
     showToast('Habitude créée ✓');
   }
 
-  saveData();
   closeModal();
+  await loadData();
   refreshAll();
 }
 
-function deleteHabit(id) {
+async function deleteHabit(id) {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user){
+    showToast('Erreur', 'session expirée');
+    return;
+  }
+
   if (!confirm('Supprimer cette habitude et toutes ses données ?')) return;
-  habits = habits.filter(h => h.id !== id);
-  Object.keys(logs).forEach(d => delete logs[d][id]);
-  saveData();
+  await supabase.from('habits').delete().eq('id', id);
+  await loadData();
   refreshAll();
   showToast('Habitude supprimée');
 }
