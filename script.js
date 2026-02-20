@@ -693,7 +693,6 @@ async function init() {
     document.getElementById('appSection').style.display = 'block';
     await loadData();
 
-    await loadData();
     selectedDate = today();
 
     // Buttons
