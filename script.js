@@ -1,11 +1,10 @@
 /**
- * HABITLY — script.js (v2)
- * ─ Bandeau de jours cliquables
- * ─ Layout 2 colonnes sur desktop
- * ─ Vue historique par jour (lecture seule)
- * ─ Progression globale journalière (anneau + compteur)
- * ─ 100% localStorage, aucun backend
+ * HABITLY — script.js
+ * Juan Lopez Loza
  */
+
+const { createClient } = supabase
+const supabase = createClient('https://xyzcompany.supabase.co', 'publishable-or-anon-key')
 
 // =============================================
 // ÉTAT GLOBAL
@@ -50,24 +49,47 @@ function saveData() {
   localStorage.setItem('habitly_logs',   JSON.stringify(logs));
 }
 
-function loadData() {
-  try {
-    habits = JSON.parse(localStorage.getItem('habitly_habits') || '[]');
-    logs   = JSON.parse(localStorage.getItem('habitly_logs')   || '{}');
-  } catch {
-    habits = []; logs = {};
+async function loadData() {
+  const { data: habitsData } = await supabase.from('habits').select('*');
+  if (habitsData) habits = habitsData;
+
+  const { data: logsData } = await supabase.from('logs').select('*');
+
+  if (logsData) {
+    logs = {};
+    logsData.forEach(row => {
+
+      if (!logs[row.date]) {
+        logs[row.date] = {};
+      }
+      logs[row.date][row.habit_id] = row.value;
+    });
   }
+
+  refreshAll();
 }
 
 // =============================================
 // LOG HELPERS
 // =============================================
 
-function setLog(habitId, value, dateStr = null) {
+async function setLog(habitId, value, dateStr = null) {
   const d = dateStr || today();
-  if (!logs[d]) logs[d] = {};
-  logs[d][habitId] = value;
-  saveData();
+
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) return console.error('No user found');
+
+  const { data, error } = await supabase
+      .from('logs')
+      .upsert({
+        user_id : user.id,
+        habit_id: habitId,
+        date: d,
+        value: value
+      })
+
+  if (error) throw error;
 }
 
 function getLogForDate(habitId, dateStr) {
@@ -644,8 +666,8 @@ function refreshAll() {
 // INIT
 // =============================================
 
-function init() {
-  loadData();
+async function init() {
+  await loadData();
   selectedDate = today();
 
   // Buttons
