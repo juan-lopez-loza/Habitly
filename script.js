@@ -8,8 +8,8 @@
 // =============================================
 
 const supabaseClient = supabase.createClient(
-    'https://xyzcompany.supabase.co',
-    'sb_publishable_WU6oL-y3kgs_uGYNr0f6dg_vBuLre_F'
+    'https://jabkrcknmymguutdqfco.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphYmtyY2tubXltZ3V1dGRxZmNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mzc5NTcsImV4cCI6MjA4NzExMzk1N30.2wlbxB1r2rsnGZqNBAB1mIu2JbcCVYsHW_VmO_Xle5Q'
 );
 
 // =============================================
