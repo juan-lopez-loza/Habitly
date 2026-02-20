@@ -10,123 +10,141 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
 </head>
 <body>
+  <section id="authSection" style="display: none;">
+    <div class="auth-card">
+      <div class="auth-logo">🌱 Habitly</div>
+      <h2 id="authTitle">Connexion</h2>
 
-  <!-- ====== TOP HEADER ====== -->
-  <header class="top-header">
-    <div class="top-header-inner">
-      <span class="logo">Habitly</span>
-      <div class="header-right">
-        <button class="icon-btn" id="exportBtn" title="Exporter JSON">↑</button>
-        <button class="icon-btn" id="importBtn" title="Importer JSON">↓</button>
-        <button class="icon-btn danger" id="resetBtn" title="Réinitialiser">✕</button>
-        <input type="file" id="importFile" accept=".json" style="display:none" />
-      </div>
-    </div>
-  </header>
-
-  <!-- ====== DAY TIMELINE BANNER ====== -->
-  <div class="timeline-bar">
-    <div class="timeline-track" id="timelineTrack">
-      <!-- Jours générés dynamiquement -->
-    </div>
-  </div>
-
-  <!-- ====== SELECTED DAY HEADER ====== -->
-  <div class="day-header" id="dayHeader">
-    <div class="day-header-inner">
-      <div class="day-info">
-        <span class="day-full-label" id="dayFullLabel"></span>
-        <span class="day-mode-badge" id="dayModeBadge">Aujourd'hui</span>
-      </div>
-      <div class="day-progress-wrap">
-        <div class="day-progress-ring">
-          <svg viewBox="0 0 44 44" class="ring-svg">
-            <circle class="ring-bg" cx="22" cy="22" r="18"/>
-            <circle class="ring-fill" id="ringFill" cx="22" cy="22" r="18"
-              stroke-dasharray="113.1" stroke-dashoffset="113.1"/>
-          </svg>
-          <span class="ring-label" id="ringLabel">0%</span>
-        </div>
-        <div class="day-progress-text">
-          <span class="day-progress-main" id="dayProgressMain">0 / 0</span>
-          <span class="day-progress-sub">habitudes complétées</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ====== MAIN TWO-COLUMN LAYOUT ====== -->
-  <main class="app-layout">
-
-    <!-- LEFT: Statistics -->
-    <aside class="col-stats">
-
-      <section class="stats-section" id="statsSection" style="display:none">
-        <h2 class="section-title">Statistiques — 7 jours</h2>
-        <div class="stats-grid" id="statsGrid"></div>
-      </section>
-
-      <section class="heatmap-section" id="heatmapSection" style="display:none">
-        <h2 class="section-title">Activité — 12 semaines</h2>
-        <div class="heatmap-wrap" id="heatmapContainer"></div>
-      </section>
-
-    </aside>
-
-    <!-- RIGHT: Habits -->
-    <section class="col-habits">
-      <div class="add-section">
-        <button class="add-btn" id="addHabitBtn">
-          <span class="add-icon">+</span>
-          <span>Nouvelle habitude</span>
-        </button>
-      </div>
-      <div class="habits-section" id="habitsContainer"></div>
-    </section>
-
-  </main>
-
-  <!-- ====== MODAL ====== -->
-  <div class="modal-overlay" id="modalOverlay">
-    <div class="modal">
-      <h3 class="modal-title" id="modalTitle">Nouvelle habitude</h3>
-      <form id="habitForm">
-        <div class="form-group">
-          <label>Nom</label>
-          <input type="text" id="habitName" placeholder="ex: Méditer 10min" maxlength="40" required />
-        </div>
-        <div class="form-group">
-          <label>Type</label>
-          <div class="type-toggle">
-            <button type="button" class="type-btn active" data-type="check">✓ Case à cocher</button>
-            <button type="button" class="type-btn" data-type="counter">＃ Compteur</button>
-          </div>
-        </div>
-        <div class="form-group" id="counterGoalGroup" style="display:none">
-          <label>Objectif (par jour)</label>
-          <input type="number" id="counterGoal" value="1" min="1" max="9999" />
-        </div>
-        <div class="form-group">
-          <label>Couleur</label>
-          <div class="color-picker">
-            <button type="button" class="color-swatch active" data-color="#FF6B6B" style="background:#FF6B6B"></button>
-            <button type="button" class="color-swatch" data-color="#FFD166" style="background:#FFD166"></button>
-            <button type="button" class="color-swatch" data-color="#06D6A0" style="background:#06D6A0"></button>
-            <button type="button" class="color-swatch" data-color="#118AB2" style="background:#118AB2"></button>
-            <button type="button" class="color-swatch" data-color="#C77DFF" style="background:#C77DFF"></button>
-            <button type="button" class="color-swatch" data-color="#FF9F1C" style="background:#FF9F1C"></button>
-            <button type="button" class="color-swatch" data-color="#E8F4F8" style="background:#E8F4F8"></button>
-          </div>
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn-secondary" id="cancelBtn">Annuler</button>
-          <button type="submit" class="btn-primary">Enregistrer</button>
-        </div>
+      <form id="authForm">
+        <input type="email" id="authEmail" placeholder="Email" required />
+        <input type="password" id="authPassword" placeholder="Mot de passe" required />
+        <button type="submit" id="authSubmitBtn" class="btn-primary">Se connecter</button>
       </form>
-    </div>
-  </div>
 
-  <div class="toast" id="toast"></div>
+      <p class="auth-toggle">
+        <span id="toggleText">Pas de compte ?</span>
+        <a href="#" id="switchToSignUp">S'inscrire</a>
+      </p>
+    </div>
+  </section>
+  <div id="appSection" style="display: none;">
+    <!-- ====== TOP HEADER ====== -->
+    <header class="top-header">
+      <div class="top-header-inner">
+        <span class="logo">Habitly</span>
+        <div class="header-right">
+          <button class="icon-btn" id="exportBtn" title="Exporter JSON">↑</button>
+          <button class="icon-btn" id="importBtn" title="Importer JSON">↓</button>
+          <button class="icon-btn danger" id="resetBtn" title="Réinitialiser">✕</button>
+          <input type="file" id="importFile" accept=".json" style="display:none" />
+        </div>
+      </div>
+    </header>
+
+    <!-- ====== DAY TIMELINE BANNER ====== -->
+    <div class="timeline-bar">
+      <div class="timeline-track" id="timelineTrack">
+        <!-- Jours générés dynamiquement -->
+      </div>
+    </div>
+
+    <!-- ====== SELECTED DAY HEADER ====== -->
+    <div class="day-header" id="dayHeader">
+      <div class="day-header-inner">
+        <div class="day-info">
+          <span class="day-full-label" id="dayFullLabel"></span>
+          <span class="day-mode-badge" id="dayModeBadge">Aujourd'hui</span>
+        </div>
+        <div class="day-progress-wrap">
+          <div class="day-progress-ring">
+            <svg viewBox="0 0 44 44" class="ring-svg">
+              <circle class="ring-bg" cx="22" cy="22" r="18"/>
+              <circle class="ring-fill" id="ringFill" cx="22" cy="22" r="18"
+                stroke-dasharray="113.1" stroke-dashoffset="113.1"/>
+            </svg>
+            <span class="ring-label" id="ringLabel">0%</span>
+          </div>
+          <div class="day-progress-text">
+            <span class="day-progress-main" id="dayProgressMain">0 / 0</span>
+            <span class="day-progress-sub">habitudes complétées</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== MAIN TWO-COLUMN LAYOUT ====== -->
+    <main class="app-layout">
+
+      <!-- LEFT: Statistics -->
+      <aside class="col-stats">
+
+        <section class="stats-section" id="statsSection" style="display:none">
+          <h2 class="section-title">Statistiques — 7 jours</h2>
+          <div class="stats-grid" id="statsGrid"></div>
+        </section>
+
+        <section class="heatmap-section" id="heatmapSection" style="display:none">
+          <h2 class="section-title">Activité — 12 semaines</h2>
+          <div class="heatmap-wrap" id="heatmapContainer"></div>
+        </section>
+
+      </aside>
+
+      <!-- RIGHT: Habits -->
+      <section class="col-habits">
+        <div class="add-section">
+          <button class="add-btn" id="addHabitBtn">
+            <span class="add-icon">+</span>
+            <span>Nouvelle habitude</span>
+          </button>
+        </div>
+        <div class="habits-section" id="habitsContainer"></div>
+      </section>
+
+    </main>
+
+    <!-- ====== MODAL ====== -->
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal">
+        <h3 class="modal-title" id="modalTitle">Nouvelle habitude</h3>
+        <form id="habitForm">
+          <div class="form-group">
+            <label>Nom</label>
+            <input type="text" id="habitName" placeholder="ex: Méditer 10min" maxlength="40" required />
+          </div>
+          <div class="form-group">
+            <label>Type</label>
+            <div class="type-toggle">
+              <button type="button" class="type-btn active" data-type="check">✓ Case à cocher</button>
+              <button type="button" class="type-btn" data-type="counter">＃ Compteur</button>
+            </div>
+          </div>
+          <div class="form-group" id="counterGoalGroup" style="display:none">
+            <label>Objectif (par jour)</label>
+            <input type="number" id="counterGoal" value="1" min="1" max="9999" />
+          </div>
+          <div class="form-group">
+            <label>Couleur</label>
+            <div class="color-picker">
+              <button type="button" class="color-swatch active" data-color="#FF6B6B" style="background:#FF6B6B"></button>
+              <button type="button" class="color-swatch" data-color="#FFD166" style="background:#FFD166"></button>
+              <button type="button" class="color-swatch" data-color="#06D6A0" style="background:#06D6A0"></button>
+              <button type="button" class="color-swatch" data-color="#118AB2" style="background:#118AB2"></button>
+              <button type="button" class="color-swatch" data-color="#C77DFF" style="background:#C77DFF"></button>
+              <button type="button" class="color-swatch" data-color="#FF9F1C" style="background:#FF9F1C"></button>
+              <button type="button" class="color-swatch" data-color="#E8F4F8" style="background:#E8F4F8"></button>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="cancelBtn">Annuler</button>
+            <button type="submit" class="btn-primary">Enregistrer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+  </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="script.js"></script>
 </body>
