@@ -45,10 +45,12 @@ function isToday(dateStr) {
 // =============================================
 
 async function loadData() {
-  const { data: habitsData } = await supabase.from('habits').select('*');
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: habitsData } = await supabase.from('habits').select('*').eq('user_id', user.id);
   if (habitsData) habits = habitsData;
 
-  const { data: logsData } = await supabase.from('logs').select('*');
+  const { data: logsData } = await supabase.from('logs').select('*').eq('user_id', user.id);
 
   if (logsData) {
     logs = {};
@@ -334,7 +336,7 @@ async function renderHabits() {
       const cur = typeof getLogForDate(id, selectedDate) === 'number' ? getLogForDate(id, selectedDate) : 0;
       const next = cur + 1;
       if (!logs[selectedDate]) logs[selectedDate] = {};
-      logs[id][selectedDate] = next;
+      logs[selectedDate][id] = next;
       refreshAll();
       await setLog(id, next, selectedDate);
       await loadData();
@@ -686,43 +688,51 @@ function refreshAll() {
 async function init() {
   const { data: { session } } = await supabase.auth.getSession();
 
-  if (!session) return;
+  if (session) {
+    document.getElementById('authSection').style.display = 'none';
+    document.getElementById('appSection').style.display = 'block';
+    await loadData();
 
-  await loadData();
-  selectedDate = today();
+    await loadData();
+    selectedDate = today();
 
-  // Buttons
-  document.getElementById('addHabitBtn').addEventListener('click', () => openModal());
-  document.getElementById('modalOverlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeModal();
-  });
-  document.getElementById('cancelBtn').addEventListener('click', closeModal);
-  document.getElementById('habitForm').addEventListener('submit', saveHabit);
+    // Buttons
+    document.getElementById('addHabitBtn').addEventListener('click', () => openModal());
+    document.getElementById('modalOverlay').addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeModal();
+    });
+    document.getElementById('cancelBtn').addEventListener('click', closeModal);
+    document.getElementById('habitForm').addEventListener('submit', saveHabit);
 
-  document.querySelectorAll('.type-btn').forEach(b =>
-    b.addEventListener('click', () => { selectedType = b.dataset.type; syncTypeButtons(); }));
+    document.querySelectorAll('.type-btn').forEach(b =>
+        b.addEventListener('click', () => { selectedType = b.dataset.type; syncTypeButtons(); }));
 
-  document.querySelectorAll('.color-swatch').forEach(s =>
-    s.addEventListener('click', () => { selectedColor = s.dataset.color; syncColorSwatches(); }));
+    document.querySelectorAll('.color-swatch').forEach(s =>
+        s.addEventListener('click', () => { selectedColor = s.dataset.color; syncColorSwatches(); }));
 
-  document.getElementById('exportBtn').addEventListener('click', exportData);
-  document.getElementById('importBtn').addEventListener('click', () =>
-    document.getElementById('importFile').click());
-  document.getElementById('importFile').addEventListener('change', e => {
-    importData(e.target.files[0]); e.target.value = '';
-  });
-  document.getElementById('resetBtn').addEventListener('click', resetData);
+    document.getElementById('exportBtn').addEventListener('click', exportData);
+    document.getElementById('importBtn').addEventListener('click', () =>
+        document.getElementById('importFile').click());
+    document.getElementById('importFile').addEventListener('change', e => {
+      importData(e.target.files[0]); e.target.value = '';
+    });
+    document.getElementById('resetBtn').addEventListener('click', resetData);
 
-  window.addEventListener('resize', () => updateStats());
+    window.addEventListener('resize', () => updateStats());
 
-  // Premier rendu
-  refreshAll();
+    // Premier rendu
+    refreshAll();
 
-  // Scroll timeline vers aujourd'hui
-  requestAnimationFrame(() => {
-    const sel = document.querySelector('.day-pill.today');
-    if (sel) sel.scrollIntoView({ behavior: 'instant', inline: 'center', block: 'nearest' });
-  });
+    // Scroll timeline vers aujourd'hui
+    requestAnimationFrame(() => {
+      const sel = document.querySelector('.day-pill.today');
+      if (sel) sel.scrollIntoView({ behavior: 'instant', inline: 'center', block: 'nearest' });
+    });
+
+  } else {
+    document.getElementById('authSection').style.display = 'block';
+    document.getElementById('appSection').style.display = 'none';
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
