@@ -1,0 +1,10 @@
+{
+  "name": "Habitly",
+  "icons": [
+    {
+      "src": "icons/icon.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
