@@ -1,21 +1,28 @@
 /**
  * HABITLY — script.js
- * Juan Lopez Loza
+ * Version corrigée avec Supabase
  */
 
-const { createClient } = supabase
-const supabase = createClient('https://xyzcompany.supabase.co', 'publishable-or-anon-key')
+// =============================================
+// INIT SUPABASE (ordre correct !)
+// =============================================
+
+const supabaseClient = supabase.createClient(
+    'https://xyzcompany.supabase.co',   // 🔁 Remplace par ton URL Supabase
+    'ta-anon-key'                        // 🔁 Remplace par ta clé anon/public
+);
 
 // =============================================
 // ÉTAT GLOBAL
 // =============================================
 
-let habits = [];
-let logs   = {};
-let editingId    = null;
-let selectedDate = today();   // Date affichée (YYYY-MM-DD)
+let habits        = [];
+let logs          = {};
+let editingId     = null;
+let selectedDate  = today();
 let selectedColor = '#FF6B6B';
 let selectedType  = 'check';
+let isSignUpMode  = false;
 
 // =============================================
 // UTILS DATE
@@ -41,29 +48,105 @@ function isToday(dateStr) {
 }
 
 // =============================================
-// STORAGE
+// AUTH
+// =============================================
+
+function initAuthListeners() {
+  // Submit du formulaire (connexion ou inscription)
+  document.getElementById('authForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email    = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const btn      = document.getElementById('authSubmitBtn');
+
+    btn.disabled    = true;
+    btn.textContent = isSignUpMode ? 'Inscription...' : 'Connexion...';
+
+    const { error } = isSignUpMode
+        ? await supabaseClient.auth.signUp({ email, password })
+        : await supabaseClient.auth.signInWithPassword({ email, password });
+
+    btn.disabled    = false;
+    btn.textContent = isSignUpMode ? "S'inscrire" : 'Se connecter';
+
+    if (error) {
+      showAuthError(error.message);
+      return;
+    }
+
+    if (isSignUpMode) {
+      showAuthError('Compte créé ! Vérifie ton email pour confirmer.', true);
+    } else {
+      await startApp();
+    }
+  });
+
+  // Toggle connexion ↔ inscription
+  document.getElementById('switchToSignUp').addEventListener('click', (e) => {
+    e.preventDefault();
+    isSignUpMode = !isSignUpMode;
+
+    document.getElementById('authTitle').textContent      = isSignUpMode ? 'Inscription'      : 'Connexion';
+    document.getElementById('authSubmitBtn').textContent  = isSignUpMode ? "S'inscrire"       : 'Se connecter';
+    document.getElementById('toggleText').textContent     = isSignUpMode ? 'Déjà un compte ?' : 'Pas de compte ?';
+    document.getElementById('switchToSignUp').textContent = isSignUpMode ? 'Se connecter'     : "S'inscrire";
+    clearAuthError();
+  });
+}
+
+function showAuthError(msg, isSuccess = false) {
+  let el = document.getElementById('authError');
+  if (!el) {
+    el = document.createElement('p');
+    el.id = 'authError';
+    el.style.cssText = 'margin-top:12px;font-size:13px;text-align:center;';
+    document.getElementById('authForm').appendChild(el);
+  }
+  el.style.color = isSuccess ? '#06D6A0' : '#FF3B30';
+  el.textContent = msg;
+}
+
+function clearAuthError() {
+  const el = document.getElementById('authError');
+  if (el) el.textContent = '';
+}
+
+// =============================================
+// STORAGE — Supabase
 // =============================================
 
 async function loadData() {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return;
 
-  const { data: habitsData } = await supabase.from('habits').select('*').eq('user_id', user.id);
-  if (habitsData) habits = habitsData;
+  // Charger les habitudes
+  const { data: habitsData, error: habitsError } = await supabaseClient
+      .from('habits')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true });
 
-  const { data: logsData } = await supabase.from('logs').select('*').eq('user_id', user.id);
+  if (habitsError) { console.error('Erreur habits:', habitsError); return; }
+  habits = habitsData || [];
 
-  if (logsData) {
-    logs = {};
-    logsData.forEach(row => {
+  // Charger les logs
+  const { data: logsData, error: logsError } = await supabaseClient
+      .from('logs')
+      .select('*')
+      .eq('user_id', user.id);
 
-      if (!logs[row.date]) {
-        logs[row.date] = {};
-      }
-      logs[row.date][row.habit_id] = row.value;
-    });
-  }
+  if (logsError) { console.error('Erreur logs:', logsError); return; }
 
-  refreshAll();
+  // Reconstituer { date: { habitId: value } }
+  logs = {};
+  (logsData || []).forEach(row => {
+    if (!logs[row.date]) logs[row.date] = {};
+    let val = row.value;
+    if (typeof val === 'string') {
+      try { val = JSON.parse(val); } catch { /* laisse en string */ }
+    }
+    logs[row.date][row.habit_id] = val;
+  });
 }
 
 // =============================================
@@ -72,21 +155,21 @@ async function loadData() {
 
 async function setLog(habitId, value, dateStr = null) {
   const d = dateStr || today();
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return console.error('setLog: aucun utilisateur connecté');
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // Mise à jour locale immédiate (optimistic UI)
+  if (!logs[d]) logs[d] = {};
+  logs[d][habitId] = value;
 
-  if (!user) return console.error('No user found');
-
-  const { data, error } = await supabase
+  const { error } = await supabaseClient
       .from('logs')
-      .upsert({
-        user_id : user.id,
-        habit_id: habitId,
-        date: d,
-        value: value
-      })
+      .upsert(
+          { user_id: user.id, habit_id: habitId, date: d, value },
+          { onConflict: 'user_id,habit_id,date' }
+      );
 
-  if (error) throw error;
+  if (error) console.error('Erreur setLog:', error);
 }
 
 function getLogForDate(habitId, dateStr) {
@@ -97,8 +180,8 @@ function isHabitDoneOnDate(habit, dateStr) {
   const val  = getLogForDate(habit.id, dateStr);
   const goal = habit.goal || 1;
   return habit.type === 'check'
-    ? val === true
-    : (typeof val === 'number' && val >= goal);
+      ? val === true
+      : (typeof val === 'number' && val >= goal);
 }
 
 // =============================================
@@ -106,7 +189,6 @@ function isHabitDoneOnDate(habit, dateStr) {
 // =============================================
 
 function calculateStreak(habitId, habitType, goal = 1) {
-  // Current streak (depuis aujourd'hui vers passé)
   let current = 0;
   for (let i = 0; i < 365; i++) {
     const d    = offsetDate(-i);
@@ -116,7 +198,6 @@ function calculateStreak(habitId, habitType, goal = 1) {
     else break;
   }
 
-  // Best streak
   let best = 0, streak = 0;
   for (let i = 364; i >= 0; i--) {
     const d    = offsetDate(-i);
@@ -133,10 +214,6 @@ function calculateStreak(habitId, habitType, goal = 1) {
 // DAILY PROGRESS
 // =============================================
 
-/**
- * Calcule le % de complétion globale pour une date donnée.
- * Retourne { done, total, pct }
- */
 function getDayProgress(dateStr) {
   if (habits.length === 0) return { done: 0, total: 0, pct: 0 };
   let done = 0;
@@ -149,7 +226,7 @@ function getDayProgress(dateStr) {
 // TIMELINE BANNER
 // =============================================
 
-const TIMELINE_DAYS = 90; // 90 jours dans le passé
+const TIMELINE_DAYS = 90;
 
 function renderTimeline() {
   const track = document.getElementById('timelineTrack');
@@ -164,9 +241,9 @@ function renderTimeline() {
 
     const pill = document.createElement('button');
     pill.className = 'day-pill';
-    if (isToday(dateStr)) pill.classList.add('today');
+    if (isToday(dateStr))         pill.classList.add('today');
     if (dateStr === selectedDate) pill.classList.add('selected');
-    if (prog.pct === 100) pill.classList.add('is-completed');
+    if (prog.pct === 100)         pill.classList.add('is-completed');
     pill.dataset.date = dateStr;
     pill.title = formatDisplayDate(dateStr);
 
@@ -181,7 +258,6 @@ function renderTimeline() {
     track.appendChild(pill);
   }
 
-  // Scroll jusqu'au jour sélectionné
   requestAnimationFrame(() => {
     const sel = track.querySelector('.day-pill.selected');
     if (sel) sel.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
@@ -190,7 +266,6 @@ function renderTimeline() {
 
 function selectDate(dateStr) {
   selectedDate = dateStr;
-  // Met à jour les pills
   document.querySelectorAll('.day-pill').forEach(p => {
     p.classList.toggle('selected', p.dataset.date === dateStr);
   });
@@ -199,7 +274,7 @@ function selectDate(dateStr) {
 }
 
 // =============================================
-// DAY HEADER (anneau de progression)
+// DAY HEADER
 // =============================================
 
 function updateDayHeader() {
@@ -213,38 +288,27 @@ function updateDayHeader() {
   label.textContent = formatDisplayDate(selectedDate);
 
   if (isToday(selectedDate)) {
-    badge.textContent = 'Aujourd\'hui';
-    badge.className   = 'day-mode-badge is-today';
-    if (prog.pct === 100) badge.className   = 'day-mode-badge is-today is-completed';
+    badge.textContent = "Aujourd'hui";
+    badge.className   = `day-mode-badge is-today${prog.pct === 100 ? ' is-completed' : ''}`;
   } else {
     const d = new Date(selectedDate + 'T00:00:00');
     badge.textContent = d.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
-    badge.className   = 'day-mode-badge is-past';
-    if (prog.pct === 100) badge.className   = 'day-mode-badge is-past is-completed';
+    badge.className   = `day-mode-badge is-past${prog.pct === 100 ? ' is-completed' : ''}`;
   }
 
   main.textContent = `${prog.done} / ${prog.total}`;
-  ring.textContent  = `${prog.pct}%`;
+  ring.textContent = `${prog.pct}%`;
 
-  // Circonférence = 2π×18 ≈ 113.1
   const offset = 113.1 - (113.1 * prog.pct / 100);
   fill.style.strokeDashoffset = offset;
-
-  // Couleur selon complétion
-  if (prog.pct === 100) {
-    fill.style.stroke = '#06D6A0';
-  } else if (prog.pct >= 50) {
-    fill.style.stroke = '#FFD166';
-  } else {
-    fill.style.stroke = '#FF6B6B';
-  }
+  fill.style.stroke = prog.pct === 100 ? '#06D6A0' : prog.pct >= 50 ? '#FFD166' : '#FF6B6B';
 }
 
 // =============================================
 // RENDER HABITS
 // =============================================
 
-async function renderHabits() {
+function renderHabits() {
   const container = document.getElementById('habitsContainer');
   const isPast    = !isToday(selectedDate);
 
@@ -264,11 +328,11 @@ async function renderHabits() {
     const val  = getLogForDate(habit.id, selectedDate);
     const goal = habit.goal || 1;
     const done = isHabitDoneOnDate(habit, selectedDate);
-
     const { current, best } = calculateStreak(habit.id, habit.type, goal);
+
     const streakLabel = current > 0
-      ? `🔥 ${current}j${best !== current ? ` · max ${best}j` : ''}`
-      : (best > 0 ? `max ${best}j` : '');
+        ? `🔥 ${current}j${best !== current ? ` · max ${best}j` : ''}`
+        : (best > 0 ? `max ${best}j` : '');
 
     const card = document.createElement('div');
     card.className = `habit-card${done ? ' completed' : ''}${isPast ? ' past-view' : ''}`;
@@ -317,29 +381,23 @@ async function renderHabits() {
     container.appendChild(card);
   });
 
-  // Events
+  // ---- Events ----
+
   container.querySelectorAll('.check-btn').forEach(btn => {
-    btn.addEventListener('click', async() => {
-      if (!isToday(selectedDate)) return; // sécurité (past-view désactive déjà visuellement)
+    btn.addEventListener('click', async () => {
+      if (!isToday(selectedDate)) return;
       const cur = getLogForDate(btn.dataset.id, selectedDate);
-      const newValue = cur === true ? false : true;
-      await setLog(btn.dataset.id, newValue, selectedDate);
-      await loadData();
+      await setLog(btn.dataset.id, cur === true ? false : true, selectedDate);
       refreshAll();
     });
   });
 
   container.querySelectorAll('.counter-inc').forEach(btn => {
-    btn.addEventListener('click', async() => {
+    btn.addEventListener('click', async () => {
       if (!isToday(selectedDate)) return;
-      const id = btn.dataset.id;
-      const cur = typeof getLogForDate(id, selectedDate) === 'number' ? getLogForDate(id, selectedDate) : 0;
-      const next = cur + 1;
-      if (!logs[selectedDate]) logs[selectedDate] = {};
-      logs[selectedDate][id] = next;
-      refreshAll();
-      await setLog(id, next, selectedDate);
-      await loadData();
+      const cur = typeof getLogForDate(btn.dataset.id, selectedDate) === 'number'
+          ? getLogForDate(btn.dataset.id, selectedDate) : 0;
+      await setLog(btn.dataset.id, cur + 1, selectedDate);
       refreshAll();
     });
   });
@@ -348,9 +406,8 @@ async function renderHabits() {
     btn.addEventListener('click', async () => {
       if (!isToday(selectedDate)) return;
       const cur = typeof getLogForDate(btn.dataset.id, selectedDate) === 'number'
-        ? getLogForDate(btn.dataset.id, selectedDate) : 0;
+          ? getLogForDate(btn.dataset.id, selectedDate) : 0;
       if (cur > 0) await setLog(btn.dataset.id, cur - 1, selectedDate);
-      await loadData();
       refreshAll();
     });
   });
@@ -365,7 +422,7 @@ async function renderHabits() {
 }
 
 // =============================================
-// STATS (7 derniers jours — toujours depuis today)
+// STATS
 // =============================================
 
 function updateStats() {
@@ -380,14 +437,10 @@ function updateStats() {
   }
   statsSection.style.display   = '';
   heatmapSection.style.display = '';
-
   grid.innerHTML = '';
 
   habits.forEach(habit => {
-    const goal   = habit.goal || 1;
-    const days   = [];
-    const labels = [];
-
+    const days = [], labels = [];
     for (let i = 6; i >= 0; i--) {
       const dateStr = offsetDate(-i);
       days.push(isHabitDoneOnDate(habit, dateStr) ? 1 : 0);
@@ -426,22 +479,16 @@ function drawMiniChart(canvas, data, labels, color) {
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
 
-  const n    = data.length;
-  const gap  = 4;
+  const n = data.length, gap = 4;
   const barW = (w - gap * (n - 1)) / n;
   const maxH = h - 14;
-
   ctx.clearRect(0, 0, w, h);
 
   data.forEach((val, i) => {
-    const x    = i * (barW + gap);
-    const barH = val ? maxH : 5;
-    const y    = maxH - barH;
-
+    const x = i * (barW + gap), barH = val ? maxH : 5, y = maxH - barH;
     ctx.fillStyle = val ? color : 'rgba(255,255,255,0.06)';
     roundRect(ctx, x, y, barW, barH, 3);
     ctx.fill();
-
     ctx.fillStyle = 'rgba(255,255,255,0.25)';
     ctx.font = `9px 'DM Mono', monospace`;
     ctx.textAlign = 'center';
@@ -469,7 +516,7 @@ function renderHeatmap() {
 
   const weeks = 12;
   const now   = new Date();
-  const dow   = (now.getDay() + 6) % 7; // lundi = 0
+  const dow   = (now.getDay() + 6) % 7;
   const start = new Date(now);
   start.setDate(now.getDate() - dow - (weeks - 1) * 7);
 
@@ -482,13 +529,13 @@ function renderHeatmap() {
     col.className = 'heatmap-col';
 
     for (let d = 0; d < 7; d++) {
-      const cell    = document.createElement('div');
+      const cell     = document.createElement('div');
       cell.className = 'heatmap-cell';
-
       const cellDate = new Date(start);
       cellDate.setDate(start.getDate() + w * 7 + d);
       const dateStr  = cellDate.toISOString().slice(0, 10);
       cell.title     = dateStr;
+      cell.style.cursor = 'pointer';
 
       if (logs[dateStr] && habits.length > 0) {
         const prog = getDayProgress(dateStr);
@@ -498,13 +545,9 @@ function renderHeatmap() {
         else if (prog.pct >  0)   cell.dataset.level = '1';
       }
 
-      // Click sur heatmap → sélectionne le jour
-      cell.style.cursor = 'pointer';
       cell.addEventListener('click', () => selectDate(dateStr));
-
       col.appendChild(cell);
     }
-
     grid.appendChild(col);
   }
 
@@ -527,7 +570,7 @@ function renderHeatmap() {
 // =============================================
 
 function openModal(editId = null) {
-  editingId    = editId;
+  editingId     = editId;
   selectedColor = '#FF6B6B';
   selectedType  = 'check';
 
@@ -538,7 +581,7 @@ function openModal(editId = null) {
   if (editId) {
     const h = habits.find(h => h.id === editId);
     if (!h) return;
-    title.textContent = 'Modifier l\'habitude';
+    title.textContent = "Modifier l'habitude";
     nameInp.value     = h.name;
     selectedColor     = h.color;
     selectedType      = h.type;
@@ -562,18 +605,18 @@ function closeModal() {
 
 function syncTypeButtons() {
   document.querySelectorAll('.type-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.type === selectedType));
+      b.classList.toggle('active', b.dataset.type === selectedType));
   document.getElementById('counterGoalGroup').style.display =
-    selectedType === 'counter' ? '' : 'none';
+      selectedType === 'counter' ? '' : 'none';
 }
 
 function syncColorSwatches() {
   document.querySelectorAll('.color-swatch').forEach(s =>
-    s.classList.toggle('active', s.dataset.color === selectedColor));
+      s.classList.toggle('active', s.dataset.color === selectedColor));
 }
 
 // =============================================
-// CRUD
+// CRUD HABITS
 // =============================================
 
 async function saveHabit(e) {
@@ -582,20 +625,18 @@ async function saveHabit(e) {
   if (!name) return;
   const goal = parseInt(document.getElementById('counterGoal').value) || 1;
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) { showToast('Session expirée, reconnecte-toi'); return; }
 
-  if (!user){
-    showToast('Erreur', 'session expirée');
-    return;
-  }
-
-  const newHabit = {name: name, goal: goal, color: selectedColor, type: selectedType, user_id: user.id};
+  const payload = { name, goal, color: selectedColor, type: selectedType, user_id: user.id };
 
   if (editingId) {
-    await supabase.from('habits').update(newHabit).eq('id', editingId)
+    const { error } = await supabaseClient.from('habits').update(payload).eq('id', editingId);
+    if (error) { showToast('Erreur lors de la modification ✗'); return; }
     showToast('Habitude modifiée ✓');
   } else {
-    await supabase.from('habits').insert(newHabit)
+    const { error } = await supabaseClient.from('habits').insert(payload);
+    if (error) { showToast('Erreur lors de la création ✗'); return; }
     showToast('Habitude créée ✓');
   }
 
@@ -605,18 +646,19 @@ async function saveHabit(e) {
 }
 
 async function deleteHabit(id) {
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user){
-    showToast('Erreur', 'session expirée');
-    return;
-  }
-
   if (!confirm('Supprimer cette habitude et toutes ses données ?')) return;
-  await supabase.from('habits').delete().eq('id', id);
+
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) { showToast('Session expirée, reconnecte-toi'); return; }
+
+  // Supprimer les logs liés d'abord
+  await supabaseClient.from('logs').delete().eq('habit_id', id).eq('user_id', user.id);
+  const { error } = await supabaseClient.from('habits').delete().eq('id', id);
+  if (error) { showToast('Erreur lors de la suppression ✗'); return; }
+
+  showToast('Habitude supprimée');
   await loadData();
   refreshAll();
-  showToast('Habitude supprimée');
 }
 
 // =============================================
@@ -624,9 +666,16 @@ async function deleteHabit(id) {
 // =============================================
 
 function exportData() {
-  const blob = new Blob([JSON.stringify({ habits, logs, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' });
-  const a    = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `habitly-${today()}.json` });
-  a.click(); URL.revokeObjectURL(a.href);
+  const blob = new Blob(
+      [JSON.stringify({ habits, logs, exportedAt: new Date().toISOString() }, null, 2)],
+      { type: 'application/json' }
+  );
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: `habitly-${today()}.json`
+  });
+  a.click();
+  URL.revokeObjectURL(a.href);
   showToast('Export réussi ✓');
 }
 
@@ -636,17 +685,26 @@ function importData(file) {
   reader.onload = e => {
     try {
       const data = JSON.parse(e.target.result);
-      if (!Array.isArray(data.habits)) throw 0;
-      habits = data.habits; logs = data.logs || {};
+      if (!Array.isArray(data.habits)) throw new Error('Format invalide');
+      habits = data.habits;
+      logs   = data.logs || {};
       refreshAll();
       showToast('Import réussi ✓');
-    } catch { showToast('Erreur : fichier invalide ✗'); }
+    } catch {
+      showToast('Erreur : fichier invalide ✗');
+    }
   };
   reader.readAsText(file);
 }
 
-function resetData() {
+async function resetData() {
   if (!confirm('Supprimer TOUTES les données ? Action irréversible.')) return;
+
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return;
+
+  await supabaseClient.from('logs').delete().eq('user_id', user.id);
+  await supabaseClient.from('habits').delete().eq('user_id', user.id);
   habits = []; logs = {};
   refreshAll();
   showToast('Données réinitialisées');
@@ -659,6 +717,7 @@ function resetData() {
 let toastTimer;
 function showToast(msg) {
   const t = document.getElementById('toast');
+  if (!t) return;
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(toastTimer);
@@ -670,7 +729,11 @@ function showToast(msg) {
 // =============================================
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
 }
 
 function refreshAll() {
@@ -682,56 +745,76 @@ function refreshAll() {
 }
 
 // =============================================
+// START APP (après connexion réussie)
+// =============================================
+
+async function startApp() {
+  document.getElementById('authSection').style.display = 'none';
+  document.getElementById('appSection').style.display  = 'block';
+
+  selectedDate = today();
+
+  await loadData();
+
+  // Boutons principaux
+  document.getElementById('addHabitBtn').addEventListener('click', () => openModal());
+  document.getElementById('modalOverlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+  document.getElementById('cancelBtn').addEventListener('click', closeModal);
+  document.getElementById('habitForm').addEventListener('submit', saveHabit);
+
+  document.querySelectorAll('.type-btn').forEach(b =>
+      b.addEventListener('click', () => { selectedType = b.dataset.type; syncTypeButtons(); }));
+
+  document.querySelectorAll('.color-swatch').forEach(s =>
+      s.addEventListener('click', () => { selectedColor = s.dataset.color; syncColorSwatches(); }));
+
+  document.getElementById('exportBtn').addEventListener('click', exportData);
+  document.getElementById('importBtn').addEventListener('click', () =>
+      document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change', e => {
+    importData(e.target.files[0]);
+    e.target.value = '';
+  });
+  document.getElementById('resetBtn').addEventListener('click', resetData);
+
+  window.addEventListener('resize', () => updateStats());
+
+  refreshAll();
+
+  requestAnimationFrame(() => {
+    const sel = document.querySelector('.day-pill.today');
+    if (sel) sel.scrollIntoView({ behavior: 'instant', inline: 'center', block: 'nearest' });
+  });
+}
+
+// =============================================
 // INIT
 // =============================================
 
 async function init() {
-  const { data: { session } } = await supabase.auth.getSession();
+  // Branche le formulaire auth en premier (toujours disponible)
+  initAuthListeners();
+
+  // Vérifie s'il existe déjà une session active
+  const { data: { session } } = await supabaseClient.auth.getSession();
 
   if (session) {
-    document.getElementById('authSection').style.display = 'none';
-    document.getElementById('appSection').style.display = 'block';
-    await loadData();
-
-    selectedDate = today();
-
-    // Buttons
-    document.getElementById('addHabitBtn').addEventListener('click', () => openModal());
-    document.getElementById('modalOverlay').addEventListener('click', e => {
-      if (e.target === e.currentTarget) closeModal();
-    });
-    document.getElementById('cancelBtn').addEventListener('click', closeModal);
-    document.getElementById('habitForm').addEventListener('submit', saveHabit);
-
-    document.querySelectorAll('.type-btn').forEach(b =>
-        b.addEventListener('click', () => { selectedType = b.dataset.type; syncTypeButtons(); }));
-
-    document.querySelectorAll('.color-swatch').forEach(s =>
-        s.addEventListener('click', () => { selectedColor = s.dataset.color; syncColorSwatches(); }));
-
-    document.getElementById('exportBtn').addEventListener('click', exportData);
-    document.getElementById('importBtn').addEventListener('click', () =>
-        document.getElementById('importFile').click());
-    document.getElementById('importFile').addEventListener('change', e => {
-      importData(e.target.files[0]); e.target.value = '';
-    });
-    document.getElementById('resetBtn').addEventListener('click', resetData);
-
-    window.addEventListener('resize', () => updateStats());
-
-    // Premier rendu
-    refreshAll();
-
-    // Scroll timeline vers aujourd'hui
-    requestAnimationFrame(() => {
-      const sel = document.querySelector('.day-pill.today');
-      if (sel) sel.scrollIntoView({ behavior: 'instant', inline: 'center', block: 'nearest' });
-    });
-
+    await startApp();
   } else {
-    document.getElementById('authSection').style.display = 'block';
-    document.getElementById('appSection').style.display = 'none';
+    document.getElementById('authSection').style.display = 'flex';
+    document.getElementById('appSection').style.display  = 'none';
   }
+
+  // Écoute les changements de session (déconnexion, expiration...)
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT') {
+      document.getElementById('authSection').style.display = 'flex';
+      document.getElementById('appSection').style.display  = 'none';
+      habits = []; logs = {};
+    }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);
