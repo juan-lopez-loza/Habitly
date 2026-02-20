@@ -1,6 +1,6 @@
 {
   "name": "Habitly",
-  "start_url": "/",
+  "start_url": "/Habitly/",
   "display": "standalone",
   "icons": [
     {
