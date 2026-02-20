@@ -47,10 +47,8 @@
         <button class="icon-btn" id="importBtn" title="Importer JSON">↓</button>
         <button class="icon-btn danger" id="resetBtn" title="Réinitialiser">✕</button>
         <input type="file" id="importFile" accept=".json" style="display:none" />
-
-        <!-- Profile button + dropdown (dans un wrapper relatif) -->
         <div class="profile-wrap">
-          <button class="profile-btn" id="profileBtn" title="Mon compte"></button>
+          <button class="profile-btn" id="profileBtn" title="Mon compte">JL</button>
           <div class="profile-dropdown" id="profileDropdown">
             <button class="profile-dropdown-item" id="deconnectBtn">
               <span class="dropdown-icon">→</span>
@@ -62,17 +60,16 @@
             </button>
           </div>
         </div>
-
       </div>
     </div>
   </header>
 
-  <!-- DAY TIMELINE BANNER -->
+  <!-- DAY TIMELINE BANNER (partagée entre les deux vues) -->
   <div class="timeline-bar">
     <div class="timeline-track" id="timelineTrack"></div>
   </div>
 
-  <!-- SELECTED DAY HEADER -->
+  <!-- SELECTED DAY HEADER (partagée entre les deux vues) -->
   <div class="day-header" id="dayHeader">
     <div class="day-header-inner">
       <div class="day-info">
@@ -96,10 +93,8 @@
     </div>
   </div>
 
-  <!-- MAIN TWO-COLUMN LAYOUT -->
-  <main class="app-layout">
-
-    <!-- LEFT: Statistics -->
+  <!-- ====== DESKTOP: TWO-COLUMN LAYOUT ====== -->
+  <main class="app-layout desktop-layout">
     <aside class="col-stats">
       <section class="stats-section" id="statsSection" style="display:none">
         <h2 class="section-title">Statistiques — 7 jours</h2>
@@ -110,8 +105,6 @@
         <div class="heatmap-wrap" id="heatmapContainer"></div>
       </section>
     </aside>
-
-    <!-- RIGHT: Habits -->
     <section class="col-habits">
       <div class="add-section">
         <button class="add-btn" id="addHabitBtn">
@@ -121,10 +114,44 @@
       </div>
       <div class="habits-section" id="habitsContainer"></div>
     </section>
-
   </main>
 
-  <!-- MODAL Add/Edit -->
+  <!-- ====== MOBILE: VUE HABITUDES ====== -->
+  <div class="mobile-view" id="mobileHabitsView">
+    <div class="add-section">
+      <button class="add-btn" id="addHabitBtnMobile">
+        <span class="add-icon">+</span>
+        <span>Nouvelle habitude</span>
+      </button>
+    </div>
+    <div class="habits-section" id="habitsContainerMobile"></div>
+  </div>
+
+  <!-- ====== MOBILE: VUE STATISTIQUES ====== -->
+  <div class="mobile-view" id="mobileStatsView" style="display:none">
+    <section class="stats-section" id="statsSectionMobile">
+      <h2 class="section-title">Statistiques — 7 jours</h2>
+      <div class="stats-grid" id="statsGridMobile"></div>
+    </section>
+    <section class="heatmap-section" id="heatmapSectionMobile" style="margin-top:24px">
+      <h2 class="section-title">Activité — 12 semaines</h2>
+      <div class="heatmap-wrap" id="heatmapContainerMobile"></div>
+    </section>
+  </div>
+
+  <!-- ====== MOBILE: BOTTOM NAV ====== -->
+  <nav class="mobile-nav" id="mobileNav">
+    <button class="mobile-nav-item active" id="navHabits" data-view="habits">
+      <span class="mobile-nav-icon">✓</span>
+      <span class="mobile-nav-label">Habitudes</span>
+    </button>
+    <button class="mobile-nav-item" id="navStats" data-view="stats">
+      <span class="mobile-nav-icon">📊</span>
+      <span class="mobile-nav-label">Statistiques</span>
+    </button>
+  </nav>
+
+  <!-- MODAL -->
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal">
       <h3 class="modal-title" id="modalTitle">Nouvelle habitude</h3>

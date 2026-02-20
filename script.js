@@ -334,7 +334,9 @@ function updateDayHeader() {
 // =============================================
 
 function renderHabits() {
-  const container = document.getElementById('habitsContainer');
+  const isMobile = window.innerWidth < 960;
+  const container = document.getElementById(
+      isMobile ? 'habitsContainerMobile' : 'habitsContainer');
   const isPast    = !isToday(selectedDate);
 
   if (habits.length === 0) {
@@ -451,9 +453,10 @@ function renderHabits() {
 // =============================================
 
 function updateStats() {
-  const statsSection   = document.getElementById('statsSection');
-  const heatmapSection = document.getElementById('heatmapSection');
-  const grid           = document.getElementById('statsGrid');
+  const isMobile      = window.innerWidth < 960;
+  const statsSection  = document.getElementById(isMobile ? 'statsSectionMobile'  : 'statsSection');
+  const heatmapSection= document.getElementById(isMobile ? 'heatmapSectionMobile': 'heatmapSection');
+  const grid          = document.getElementById(isMobile ? 'statsGridMobile'      : 'statsGrid');
 
   if (habits.length === 0) {
     statsSection.style.display   = 'none';
@@ -536,7 +539,10 @@ function roundRect(ctx, x, y, w, h, r) {
 // =============================================
 
 function renderHeatmap() {
-  const container = document.getElementById('heatmapContainer');
+  const isMobile  = window.innerWidth < 960;
+  const container = document.getElementById(
+      isMobile ? 'heatmapContainerMobile' : 'heatmapContainer'
+  );
   if (habits.length === 0) return;
 
   const weeks = 12;
@@ -792,6 +798,7 @@ async function startApp() {
 
   // Boutons principaux
   document.getElementById('addHabitBtn').addEventListener('click', () => openModal());
+  document.getElementById('addHabitBtnMobile').addEventListener('click', () => openModal());
   document.getElementById('modalOverlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeModal();
   });
@@ -815,6 +822,7 @@ async function startApp() {
 
   window.addEventListener('resize', () => updateStats());
 
+  initMobileNav();
   refreshAll();
 
   requestAnimationFrame(() => {
@@ -826,6 +834,31 @@ async function startApp() {
 // =============================================
 // INIT
 // =============================================
+
+function initMobileNav() {
+  const navHabits = document.getElementById('navHabits');
+  const navStats  = document.getElementById('navStats');
+  const viewHabits = document.getElementById('mobileHabitsView');
+  const viewStats  = document.getElementById('mobileStatsView');
+
+  navHabits.addEventListener('click', () => {
+    // Affiche habitudes, cache stats
+    viewHabits.style.display = 'flex';
+    viewStats.style.display  = 'none';
+    // Met à jour l'onglet actif
+    navHabits.classList.add('active');
+    navStats.classList.remove('active');
+  });
+
+  navStats.addEventListener('click', () => {
+    // Affiche stats, cache habitudes
+    viewStats.style.display  = 'flex';
+    viewHabits.style.display = 'none';
+    // Met à jour l'onglet actif
+    navStats.classList.add('active');
+    navHabits.classList.remove('active');
+  });
+}
 
 async function init() {
   // Branche le formulaire auth en premier
