@@ -574,16 +574,13 @@ function renderHabits() {
 function updateStats() {
   const isMobile       = window.innerWidth < 960;
   const statsSection   = document.getElementById(isMobile ? 'statsSectionMobile'   : 'statsSection');
-  const heatmapSection = document.getElementById(isMobile ? 'heatmapSectionMobile' : 'heatmapSection');
   const grid           = document.getElementById(isMobile ? 'statsGridMobile'       : 'statsGrid');
 
   if (habits.length === 0) {
     statsSection.style.display   = 'none';
-    heatmapSection.style.display = 'none';
     return;
   }
   statsSection.style.display   = '';
-  heatmapSection.style.display = '';
   grid.innerHTML = '';
 
   habits.forEach(habit => {
@@ -651,68 +648,6 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
   ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
-}
-
-// =============================================
-// HEATMAP
-// =============================================
-
-function renderHeatmap() {
-  const isMobile  = window.innerWidth < 960;
-  const container = document.getElementById(
-      isMobile ? 'heatmapContainerMobile' : 'heatmapContainer'
-  );
-  if (!container || habits.length === 0) return;
-
-  const weeks = 12;
-  const now   = new Date();
-  const dow   = (now.getDay() + 6) % 7;
-  const start = new Date(now);
-  start.setDate(now.getDate() - dow - (weeks - 1) * 7);
-
-  container.innerHTML = '';
-  const grid = document.createElement('div');
-  grid.className = 'heatmap-grid';
-
-  for (let w = 0; w < weeks; w++) {
-    const col = document.createElement('div');
-    col.className = 'heatmap-col';
-
-    for (let d = 0; d < 7; d++) {
-      const cell     = document.createElement('div');
-      cell.className = 'heatmap-cell';
-      const cellDate = new Date(start);
-      cellDate.setDate(start.getDate() + w * 7 + d);
-      const dateStr  = cellDate.toISOString().slice(0, 10);
-      cell.title     = dateStr;
-      cell.style.cursor = 'pointer';
-
-      if (logs[dateStr] && habits.length > 0) {
-        const prog = getDayProgress(dateStr);
-        if      (prog.pct >= 100) cell.dataset.level = '4';
-        else if (prog.pct >= 75)  cell.dataset.level = '3';
-        else if (prog.pct >= 50)  cell.dataset.level = '2';
-        else if (prog.pct >  0)   cell.dataset.level = '1';
-      }
-
-      cell.addEventListener('click', () => selectDate(dateStr));
-      col.appendChild(cell);
-    }
-    grid.appendChild(col);
-  }
-
-  const legend = document.createElement('div');
-  legend.className = 'heatmap-legend';
-  legend.innerHTML = `
-    <span>Moins</span>
-    <div class="heatmap-legend-cell" style="background:rgba(255,107,107,0.2)"></div>
-    <div class="heatmap-legend-cell" style="background:rgba(255,107,107,0.45)"></div>
-    <div class="heatmap-legend-cell" style="background:rgba(255,107,107,0.7)"></div>
-    <div class="heatmap-legend-cell" style="background:rgba(255,107,107,1)"></div>
-    <span>Plus</span>`;
-
-  container.appendChild(grid);
-  container.appendChild(legend);
 }
 
 // =============================================
@@ -930,7 +865,6 @@ function refreshAll() {
   renderCategories();
   renderHabits();
   updateStats();
-  renderHeatmap();
 }
 
 // =============================================
