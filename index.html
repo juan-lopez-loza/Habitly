@@ -118,6 +118,7 @@
           <span>Nouvelle catégorie</span>
         </button>
       </div>
+      <div id="categoriesContainer"></div>
       <div class="habits-section" id="habitsContainer"></div>
     </section>
   </main>
@@ -136,6 +137,7 @@
         <span>Nouvelle catégorie</span>
       </button>
     </div>
+    <div id="categoriesContainerMobile"></div>
     <div class="habits-section" id="habitsContainerMobile"></div>
   </div>
 
@@ -195,11 +197,25 @@
             <button type="button" class="color-swatch" data-color="#E8F4F8" style="background:#E8F4F8"></button>
           </div>
         </div>
+        <div class="form-group">
+          <label>Catégorie</label>
+          <div class="category-picker-inline" id="habitCategoryPicker"></div>
+        </div>
         <div class="modal-actions">
           <button type="button" class="btn-secondary" id="cancelBtn">Annuler</button>
           <button type="submit" class="btn-primary">Enregistrer</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="categoryModalOverlay">
+    <div class="modal">
+      <h3 class="modal-title">Choisir une catégorie</h3>
+      <div class="category-picker" id="categoryPicker"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="cancelCategoryBtn">Fermer</button>
+      </div>
     </div>
   </div>
 

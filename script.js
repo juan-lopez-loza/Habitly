@@ -5,13 +5,24 @@
  */
 
 // =============================================
-// INIT SUPABASE (ordre correct !)
+// INIT SUPABASE
 // =============================================
 
 const supabaseClient = supabase.createClient(
     'https://jabkrcknmymguutdqfco.supabase.co',
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphYmtyY2tubXltZ3V1dGRxZmNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mzc5NTcsImV4cCI6MjA4NzExMzk1N30.2wlbxB1r2rsnGZqNBAB1mIu2JbcCVYsHW_VmO_Xle5Q'
 );
+
+// =============================================
+// CATÉGORIES (hardcodées)
+// =============================================
+
+const CATEGORIES = [
+  { id: 'health',    label: 'Santé',     emoji: '🏃' },
+  { id: 'mental',    label: 'Mental',    emoji: '🧠' },
+  { id: 'work',      label: 'Travail',   emoji: '💼' },
+  { id: 'lifestyle', label: 'Lifestyle', emoji: '🌿' },
+];
 
 // =============================================
 // ÉTAT GLOBAL
@@ -23,8 +34,10 @@ let editingId     = null;
 let selectedDate  = today();
 let selectedColor = '#FF6B6B';
 let selectedType  = 'check';
+let selectedCategory = null;
 let isSignUpMode  = false;
 let profileListenersInitialized = false;
+let activeCategories = JSON.parse(localStorage.getItem('activeCategories') || '[]');
 
 // =============================================
 // UTILS DATE
@@ -54,7 +67,6 @@ function isToday(dateStr) {
 // =============================================
 
 function initAuthListeners() {
-  // Submit du formulaire (connexion ou inscription)
   document.getElementById('authForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email    = document.getElementById('authEmail').value.trim();
@@ -71,10 +83,7 @@ function initAuthListeners() {
     btn.disabled    = false;
     btn.textContent = isSignUpMode ? "S'inscrire" : 'Se connecter';
 
-    if (error) {
-      showAuthError(error.message);
-      return;
-    }
+    if (error) { showAuthError(error.message); return; }
 
     if (isSignUpMode) {
       showAuthError('Compte créé ! Vérifie ton email pour confirmer.', true);
@@ -83,17 +92,26 @@ function initAuthListeners() {
     }
   });
 
-  // Toggle connexion ↔ inscription
   document.getElementById('switchToSignUp').addEventListener('click', (e) => {
     e.preventDefault();
     isSignUpMode = !isSignUpMode;
-
     document.getElementById('authTitle').textContent      = isSignUpMode ? 'Inscription'      : 'Connexion';
     document.getElementById('authSubmitBtn').textContent  = isSignUpMode ? "S'inscrire"       : 'Se connecter';
     document.getElementById('toggleText').textContent     = isSignUpMode ? 'Déjà un compte ?' : 'Pas de compte ?';
     document.getElementById('switchToSignUp').textContent = isSignUpMode ? 'Se connecter'     : "S'inscrire";
     clearAuthError();
   });
+
+  // Toggle visibilité mot de passe
+  const togglePwdBtn = document.getElementById('togglePassword');
+  if (togglePwdBtn) {
+    togglePwdBtn.addEventListener('click', () => {
+      const input = document.getElementById('authPassword');
+      const isHidden = input.type === 'password';
+      input.type = isHidden ? 'text' : 'password';
+      togglePwdBtn.textContent = isHidden ? '🙈' : '👁';
+    });
+  }
 }
 
 function showAuthError(msg, isSuccess = false) {
@@ -113,6 +131,10 @@ function clearAuthError() {
   if (el) el.textContent = '';
 }
 
+// =============================================
+// PROFILE
+// =============================================
+
 function initProfileListeners() {
   if (profileListenersInitialized) return;
   profileListenersInitialized = true;
@@ -120,20 +142,21 @@ function initProfileListeners() {
   document.getElementById('profileBtn').addEventListener('click', (e) => {
     e.stopPropagation();
     document.getElementById('profileDropdown').classList.toggle('open');
-  })
-  document.addEventListener('click', (e) => {
+  });
+
+  document.addEventListener('click', () => {
     document.getElementById('profileDropdown').classList.remove('open');
-  })
+  });
 
   document.getElementById('deconnectBtn').addEventListener('click', async () => {
     await supabaseClient.auth.signOut();
-  })
+  });
 
   document.getElementById('deleteProfileBtn').addEventListener('click', async () => {
     if (!confirm('Supprimer définitivement ton compte et toutes tes données ?')) return;
     await resetData();
     await supabaseClient.rpc('delete_user');
-  })
+  });
 }
 
 // =============================================
@@ -144,7 +167,6 @@ async function loadData() {
   const { data: { user } } = await supabaseClient.auth.getUser();
   if (!user) return;
 
-  // Charger les habitudes
   const { data: habitsData, error: habitsError } = await supabaseClient
       .from('habits')
       .select('*')
@@ -154,7 +176,6 @@ async function loadData() {
   if (habitsError) { console.error('Erreur habits:', habitsError); return; }
   habits = habitsData || [];
 
-  // Charger les logs
   const { data: logsData, error: logsError } = await supabaseClient
       .from('logs')
       .select('*')
@@ -162,7 +183,6 @@ async function loadData() {
 
   if (logsError) { console.error('Erreur logs:', logsError); return; }
 
-  // Reconstituer { date: { habitId: value } }
   logs = {};
   (logsData || []).forEach(row => {
     if (!logs[row.date]) logs[row.date] = {};
@@ -183,7 +203,6 @@ async function setLog(habitId, value, dateStr = null) {
   const { data: { user } } = await supabaseClient.auth.getUser();
   if (!user) return console.error('setLog: aucun utilisateur connecté');
 
-  // Mise à jour locale immédiate (optimistic UI)
   if (!logs[d]) logs[d] = {};
   logs[d][habitId] = value;
 
@@ -248,7 +267,7 @@ function getDayProgress(dateStr) {
 }
 
 // =============================================
-// TIMELINE BANNER
+// TIMELINE
 // =============================================
 
 const TIMELINE_DAYS = 90;
@@ -295,6 +314,7 @@ function selectDate(dateStr) {
     p.classList.toggle('selected', p.dataset.date === dateStr);
   });
   updateDayHeader();
+  renderCategories();
   renderHabits();
 }
 
@@ -330,28 +350,104 @@ function updateDayHeader() {
 }
 
 // =============================================
-// RENDER HABITS
+// CATÉGORIES — MODAL
 // =============================================
 
-function renderHabits() {
-  const isMobile = window.innerWidth < 960;
-  const container = document.getElementById(
-      isMobile ? 'habitsContainerMobile' : 'habitsContainer');
-  const isPast    = !isToday(selectedDate);
+function openCategoryModal() {
+  const picker = document.getElementById('categoryPicker');
+  picker.innerHTML = '';
 
-  if (habits.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">🌱</div>
-        <p>Aucune habitude pour l'instant.</p>
-        <p style="margin-top:4px;color:#555;font-size:12px">Ajoutez votre première habitude</p>
-      </div>`;
+  CATEGORIES.forEach(cat => {
+    const isActive = activeCategories.includes(cat.id);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `category-pick-btn${isActive ? ' active' : ''}`;
+    btn.dataset.id = cat.id;
+    btn.innerHTML = `<span class="cat-emoji">${cat.emoji}</span><span class="cat-label">${cat.label}</span>`;
+
+    btn.addEventListener('click', () => {
+      if (activeCategories.includes(cat.id)) {
+        activeCategories = activeCategories.filter(id => id !== cat.id);
+      } else {
+        activeCategories.push(cat.id);
+      }
+      localStorage.setItem('activeCategories', JSON.stringify(activeCategories));
+      btn.classList.toggle('active');
+      renderCategories();
+    });
+
+    picker.appendChild(btn);
+  });
+
+  document.getElementById('categoryModalOverlay').classList.add('open');
+}
+
+function closeCategoryModal() {
+  document.getElementById('categoryModalOverlay').classList.remove('open');
+}
+
+// =============================================
+// CATÉGORIES — RENDER
+// =============================================
+
+function renderCategories() {
+  const isMobile  = window.innerWidth < 960;
+  const container = document.getElementById(
+      isMobile ? 'categoriesContainerMobile' : 'categoriesContainer'
+  );
+  if (!container) return;
+  container.innerHTML = '';
+
+  activeCategories.forEach(catId => {
+    const cat      = CATEGORIES.find(c => c.id === catId);
+    if (!cat) return;
+    const catHabits = habits.filter(h => h.category_id === catId);
+
+    const block = document.createElement('div');
+    block.className = 'category-block';
+
+    block.innerHTML = `
+      <div class="category-header">
+        <span class="category-emoji">${cat.emoji}</span>
+        <span class="category-name">${cat.label}</span>
+        <span class="category-count">${catHabits.length}</span>
+        <span class="category-chevron">▾</span>
+      </div>
+      <div class="category-habits" id="catHabits_${isMobile ? 'mobile_' : ''}${catId}" data-open="true"></div>
+    `;
+
+    container.appendChild(block);
+
+    // Remplir les habitudes de cette catégorie
+    renderHabitsInContainer(catHabits, `catHabits_${isMobile ? 'mobile_' : ''}${catId}`);
+
+    // Toggle open/close
+    block.querySelector('.category-header').addEventListener('click', () => {
+      const habitsDiv = block.querySelector('.category-habits');
+      const chevron   = block.querySelector('.category-chevron');
+      const isOpen    = habitsDiv.dataset.open !== 'false';
+      habitsDiv.dataset.open  = isOpen ? 'false' : 'true';
+      chevron.textContent     = isOpen ? '▸' : '▾';
+    });
+  });
+}
+
+// =============================================
+// HABITS — RENDER (cards partagées)
+// =============================================
+
+function renderHabitsInContainer(habitsList, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const isPast = !isToday(selectedDate);
+  container.innerHTML = '';
+
+  if (habitsList.length === 0) {
+    container.innerHTML = `<p class="category-empty">Aucune habitude dans cette catégorie</p>`;
     return;
   }
 
-  container.innerHTML = '';
-
-  habits.forEach(habit => {
+  habitsList.forEach(habit => {
     const val  = getLogForDate(habit.id, selectedDate);
     const goal = habit.goal || 1;
     const done = isHabitDoneOnDate(habit, selectedDate);
@@ -408,8 +504,7 @@ function renderHabits() {
     container.appendChild(card);
   });
 
-  // ---- Events ----
-
+  // Events
   container.querySelectorAll('.check-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!isToday(selectedDate)) return;
@@ -448,15 +543,39 @@ function renderHabits() {
   });
 }
 
+// Habitudes sans catégorie
+function renderHabits() {
+  const isMobile  = window.innerWidth < 960;
+  const container = document.getElementById(
+      isMobile ? 'habitsContainerMobile' : 'habitsContainer'
+  );
+  if (!container) return;
+
+  const uncategorized = habits.filter(h => !h.category_id);
+
+  if (habits.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🌱</div>
+        <p>Aucune habitude pour l'instant.</p>
+        <p style="margin-top:4px;color:#555;font-size:12px">Ajoutez votre première habitude</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = '';
+  renderHabitsInContainer(uncategorized, container.id);
+}
+
 // =============================================
 // STATS
 // =============================================
 
 function updateStats() {
-  const isMobile      = window.innerWidth < 960;
-  const statsSection  = document.getElementById(isMobile ? 'statsSectionMobile'  : 'statsSection');
-  const heatmapSection= document.getElementById(isMobile ? 'heatmapSectionMobile': 'heatmapSection');
-  const grid          = document.getElementById(isMobile ? 'statsGridMobile'      : 'statsGrid');
+  const isMobile       = window.innerWidth < 960;
+  const statsSection   = document.getElementById(isMobile ? 'statsSectionMobile'   : 'statsSection');
+  const heatmapSection = document.getElementById(isMobile ? 'heatmapSectionMobile' : 'heatmapSection');
+  const grid           = document.getElementById(isMobile ? 'statsGridMobile'       : 'statsGrid');
 
   if (habits.length === 0) {
     statsSection.style.display   = 'none';
@@ -543,7 +662,7 @@ function renderHeatmap() {
   const container = document.getElementById(
       isMobile ? 'heatmapContainerMobile' : 'heatmapContainer'
   );
-  if (habits.length === 0) return;
+  if (!container || habits.length === 0) return;
 
   const weeks = 12;
   const now   = new Date();
@@ -597,13 +716,14 @@ function renderHeatmap() {
 }
 
 // =============================================
-// MODAL
+// MODAL HABITUDE
 // =============================================
 
 function openModal(editId = null) {
-  editingId     = editId;
-  selectedColor = '#FF6B6B';
-  selectedType  = 'check';
+  editingId        = editId;
+  selectedColor    = '#FF6B6B';
+  selectedType     = 'check';
+  selectedCategory = null;
 
   const title   = document.getElementById('modalTitle');
   const nameInp = document.getElementById('habitName');
@@ -616,6 +736,7 @@ function openModal(editId = null) {
     nameInp.value     = h.name;
     selectedColor     = h.color;
     selectedType      = h.type;
+    selectedCategory  = h.category_id || null;
     goalInp.value     = h.goal || 1;
   } else {
     title.textContent = 'Nouvelle habitude';
@@ -625,6 +746,7 @@ function openModal(editId = null) {
 
   syncTypeButtons();
   syncColorSwatches();
+  syncCategoryPicker();
   document.getElementById('modalOverlay').classList.add('open');
   setTimeout(() => nameInp.focus(), 300);
 }
@@ -646,6 +768,35 @@ function syncColorSwatches() {
       s.classList.toggle('active', s.dataset.color === selectedColor));
 }
 
+function syncCategoryPicker() {
+  const picker = document.getElementById('habitCategoryPicker');
+  if (!picker) return;
+  picker.innerHTML = '';
+
+  // Option "Aucune"
+  const noneBtn = document.createElement('button');
+  noneBtn.type = 'button';
+  noneBtn.className = `habit-cat-btn${!selectedCategory ? ' active' : ''}`;
+  noneBtn.innerHTML = `<span>—</span><span>Aucune</span>`;
+  noneBtn.addEventListener('click', () => {
+    selectedCategory = null;
+    syncCategoryPicker();
+  });
+  picker.appendChild(noneBtn);
+
+  CATEGORIES.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `habit-cat-btn${selectedCategory === cat.id ? ' active' : ''}`;
+    btn.innerHTML = `<span>${cat.emoji}</span><span>${cat.label}</span>`;
+    btn.addEventListener('click', () => {
+      selectedCategory = cat.id;
+      syncCategoryPicker();
+    });
+    picker.appendChild(btn);
+  });
+}
+
 // =============================================
 // CRUD HABITS
 // =============================================
@@ -659,7 +810,14 @@ async function saveHabit(e) {
   const { data: { user } } = await supabaseClient.auth.getUser();
   if (!user) { showToast('Session expirée, reconnecte-toi'); return; }
 
-  const payload = { name, goal, color: selectedColor, type: selectedType, user_id: user.id };
+  const payload = {
+    name,
+    goal,
+    color:       selectedColor,
+    type:        selectedType,
+    category_id: selectedCategory || null,
+    user_id:     user.id
+  };
 
   if (editingId) {
     const { error } = await supabaseClient.from('habits').update(payload).eq('id', editingId);
@@ -682,7 +840,6 @@ async function deleteHabit(id) {
   const { data: { user } } = await supabaseClient.auth.getUser();
   if (!user) { showToast('Session expirée, reconnecte-toi'); return; }
 
-  // Supprimer les logs liés d'abord
   await supabaseClient.from('logs').delete().eq('habit_id', id).eq('user_id', user.id);
   const { error } = await supabaseClient.from('habits').delete().eq('id', id);
   if (error) { showToast('Erreur lors de la suppression ✗'); return; }
@@ -770,13 +927,39 @@ function escHtml(s) {
 function refreshAll() {
   renderTimeline();
   updateDayHeader();
+  renderCategories();
   renderHabits();
   updateStats();
   renderHeatmap();
 }
 
 // =============================================
-// START APP (après connexion réussie)
+// MOBILE NAV
+// =============================================
+
+function initMobileNav() {
+  const navHabits  = document.getElementById('navHabits');
+  const navStats   = document.getElementById('navStats');
+  const viewHabits = document.getElementById('mobileHabitsView');
+  const viewStats  = document.getElementById('mobileStatsView');
+
+  navHabits.addEventListener('click', () => {
+    viewHabits.style.display = 'flex';
+    viewStats.style.display  = 'none';
+    navHabits.classList.add('active');
+    navStats.classList.remove('active');
+  });
+
+  navStats.addEventListener('click', () => {
+    viewStats.style.display  = 'flex';
+    viewHabits.style.display = 'none';
+    navStats.classList.add('active');
+    navHabits.classList.remove('active');
+  });
+}
+
+// =============================================
+// START APP
 // =============================================
 
 async function startApp() {
@@ -784,9 +967,9 @@ async function startApp() {
   document.getElementById('appSection').style.display  = 'block';
 
   selectedDate = today();
-
   await loadData();
 
+  // Initiales profil
   const { data: { user } } = await supabaseClient.auth.getUser();
   const parts = user.email.split('@')[0].split('.');
   const initials = parts.length >= 2
@@ -796,7 +979,7 @@ async function startApp() {
 
   initProfileListeners();
 
-  // Boutons principaux
+  // Boutons habitudes
   document.getElementById('addHabitBtn').addEventListener('click', () => openModal());
   document.getElementById('addHabitBtnMobile').addEventListener('click', () => openModal());
   document.getElementById('modalOverlay').addEventListener('click', e => {
@@ -807,10 +990,18 @@ async function startApp() {
 
   document.querySelectorAll('.type-btn').forEach(b =>
       b.addEventListener('click', () => { selectedType = b.dataset.type; syncTypeButtons(); }));
-
   document.querySelectorAll('.color-swatch').forEach(s =>
       s.addEventListener('click', () => { selectedColor = s.dataset.color; syncColorSwatches(); }));
 
+  // Boutons catégories
+  document.getElementById('addCategoryBtn').addEventListener('click', () => openCategoryModal());
+  document.getElementById('addCategoryBtnMobile').addEventListener('click', () => openCategoryModal());
+  document.getElementById('categoryModalOverlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeCategoryModal();
+  });
+  document.getElementById('cancelCategoryBtn').addEventListener('click', closeCategoryModal);
+
+  // Export / Import / Reset
   document.getElementById('exportBtn').addEventListener('click', exportData);
   document.getElementById('importBtn').addEventListener('click', () =>
       document.getElementById('importFile').click());
@@ -820,7 +1011,7 @@ async function startApp() {
   });
   document.getElementById('resetBtn').addEventListener('click', resetData);
 
-  window.addEventListener('resize', () => updateStats());
+  window.addEventListener('resize', () => { updateStats(); renderCategories(); renderHabits(); });
 
   initMobileNav();
   refreshAll();
@@ -835,36 +1026,9 @@ async function startApp() {
 // INIT
 // =============================================
 
-function initMobileNav() {
-  const navHabits = document.getElementById('navHabits');
-  const navStats  = document.getElementById('navStats');
-  const viewHabits = document.getElementById('mobileHabitsView');
-  const viewStats  = document.getElementById('mobileStatsView');
-
-  navHabits.addEventListener('click', () => {
-    // Affiche habitudes, cache stats
-    viewHabits.style.display = 'flex';
-    viewStats.style.display  = 'none';
-    // Met à jour l'onglet actif
-    navHabits.classList.add('active');
-    navStats.classList.remove('active');
-  });
-
-  navStats.addEventListener('click', () => {
-    // Affiche stats, cache habitudes
-    viewStats.style.display  = 'flex';
-    viewHabits.style.display = 'none';
-    // Met à jour l'onglet actif
-    navStats.classList.add('active');
-    navHabits.classList.remove('active');
-  });
-}
-
 async function init() {
-  // Branche le formulaire auth en premier
   initAuthListeners();
 
-  // Vérifie s'il existe déjà une session active
   const { data: { session } } = await supabaseClient.auth.getSession();
 
   if (session) {
@@ -874,14 +1038,12 @@ async function init() {
     document.getElementById('appSection').style.display  = 'none';
   }
 
-  // Écoute les changements de session (déconnexion, expiration...)
   supabaseClient.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_OUT') {
       profileListenersInitialized = false;
       document.getElementById('authSection').style.display = 'flex';
       document.getElementById('appSection').style.display  = 'none';
-      habits = []; logs = {};
-      // reload la page pour pouvoir se déconecter à nouveau
+      habits = []; logs = [];
       location.reload();
     }
   });
