@@ -80,6 +80,36 @@ function refreshAll() {
   updateStats();
 }
 
+/**
+ * Rafraîchissement ciblé lorsqu'une habitude change
+ */
+function refreshHabitChange(habitId, dateStr) {
+  // 1. Mettre à jour la carte de l'habitude (dans toutes les sections où elle apparaît)
+  const habit = habits.find(h => h.id === habitId);
+  if (habit) {
+    const isPast = !isToday(selectedDate);
+    const val = getLogForDate(habit.id, selectedDate);
+    const goal = habit.goal || 1;
+    const { current, best } = calculateStreak(habit.id, habit.type, goal);
+    
+    document.querySelectorAll(`.habit-card[data-id="${habitId}"]`).forEach(card => {
+      const newCard = createHabitCardElement(habit, isPast, val, goal, current, best);
+      card.innerHTML = newCard.innerHTML;
+      card.className = newCard.className;
+      attachHabitCardEventListeners(card, habitId);
+    });
+  }
+
+  // 2. Mettre à jour l'en-tête du jour (progress ring)
+  updateDayHeader();
+
+  // 3. Mettre à jour la timeline pour ce jour précis
+  updateTimelinePill(dateStr);
+
+  // 4. Mettre à jour la stat de cette habitude
+  updateHabitStat(habitId);
+}
+
 const TIMELINE_DAYS = 90;
 function renderTimeline() {
   const track = document.getElementById('timelineTrack');
@@ -116,6 +146,19 @@ function renderTimeline() {
     const sel = track.querySelector('.day-pill.selected');
     if (sel) sel.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   });
+}
+
+function updateTimelinePill(dateStr) {
+  const pill = document.querySelector(`.day-pill[data-date="${dateStr}"]`);
+  if (!pill) return;
+  
+  const prog = getDayProgress(dateStr);
+  pill.classList.toggle('is-completed', prog.pct === 100);
+  const fill = pill.querySelector('.day-pill-arc-fill');
+  if (fill) {
+    fill.style.width = `${prog.pct}%`;
+    fill.classList.toggle('is-completed', prog.pct === 100);
+  }
 }
 
 function selectDate(dateStr) {
@@ -159,45 +202,63 @@ function updateDayHeader() {
 }
 
 function renderCategories() {
-  const isMobile  = window.innerWidth < 960;
+  const isMobile = window.innerWidth < 960;
   const container = document.getElementById(isMobile ? 'categoriesContainerMobile' : 'categoriesContainer');
   if (!container) return;
-  container.innerHTML = '';
+
+  const existingCategoryBlocks = new Map();
+  container.querySelectorAll('.category-block').forEach(block => {
+    const catId = block.dataset.categoryId;
+    if (catId) existingCategoryBlocks.set(catId, block);
+  });
+
+  const processedCategoryIds = new Set();
 
   activeCategories.forEach(catId => {
-    const cat      = CATEGORIES.find(c => c.id === catId);
+    const cat = CATEGORIES.find(c => c.id === catId);
     if (!cat) return;
     const catHabits = habits.filter(h => h.category_id === catId);
+    const habitsContainerId = `catHabits_${isMobile ? 'mobile_' : ''}${catId}`;
 
-    const block = document.createElement('div');
-    block.className = 'category-block';
-    const containerId = `catHabits_${isMobile ? 'mobile_' : ''}${catId}`;
+    let block = existingCategoryBlocks.get(catId);
+    if (block) {
+      block.querySelector('.category-name').textContent = cat.label;
+      block.querySelector('.category-count').textContent = catHabits.length;
+      renderHabitsInContainer(catHabits, habitsContainerId);
+    } else {
+      block = document.createElement('div');
+      block.className = 'category-block';
+      block.dataset.categoryId = catId;
+      block.innerHTML = `
+        <div class="category-header">
+          <span class="category-emoji">${cat.emoji}</span>
+          <span class="category-name">${cat.label}</span>
+          <span class="category-count">${catHabits.length}</span>
+          <span class="category-chevron">▾</span>
+        </div>
+        <div class="category-habits" id="${habitsContainerId}" data-open="true"></div>
+      `;
+      container.appendChild(block);
+      renderHabitsInContainer(catHabits, habitsContainerId);
 
-    block.innerHTML = `
-      <div class="category-header">
-        <span class="category-emoji">${cat.emoji}</span>
-        <span class="category-name">${cat.label}</span>
-        <span class="category-count">${catHabits.length}</span>
-        <span class="category-chevron">▾</span>
-      </div>
-      <div class="category-habits" id="${containerId}" data-open="true"></div>
-    `;
+      block.querySelector('.category-header').addEventListener('click', () => {
+        const habitsDiv = block.querySelector('.category-habits');
+        const chevron = block.querySelector('.category-chevron');
+        const isOpen = habitsDiv.dataset.open !== 'false';
+        habitsDiv.dataset.open = isOpen ? 'false' : 'true';
+        chevron.textContent = isOpen ? '▸' : '▾';
+      });
+    }
+    processedCategoryIds.add(catId);
+  });
 
-    container.appendChild(block);
-    renderHabitsInContainer(catHabits, containerId);
-
-    block.querySelector('.category-header').addEventListener('click', () => {
-      const habitsDiv = block.querySelector('.category-habits');
-      const chevron   = block.querySelector('.category-chevron');
-      const isOpen    = habitsDiv.dataset.open !== 'false';
-      habitsDiv.dataset.open  = isOpen ? 'false' : 'true';
-      chevron.textContent     = isOpen ? '▸' : '▾';
-    });
+  existingCategoryBlocks.forEach((block, catId) => {
+    if (!processedCategoryIds.has(catId)) block.remove();
   });
 }
 
 function renderHabits() {
-  const isMobile  = window.innerWidth < 960;
+  const isMobile = window.innerWidth < 960;
   const container = document.getElementById(isMobile ? 'habitsContainerMobile' : 'habitsContainer');
   if (!container) return;
 
@@ -213,7 +274,9 @@ function renderHabits() {
     return;
   }
 
-  container.innerHTML = '';
+  const globalEmptyState = container.querySelector('.empty-state');
+  if (globalEmptyState) globalEmptyState.remove();
+
   renderHabitsInContainer(uncategorized, container.id);
 }
 
@@ -221,169 +284,227 @@ function renderHabitsInContainer(habitsList, containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
   const isPast = !isToday(selectedDate);
-  container.innerHTML = '';
 
-  if (habitsList.length === 0) {
+  if (habitsList.length === 0 && containerId !== 'habitsContainer' && containerId !== 'habitsContainerMobile') {
     container.innerHTML = `<p class="category-empty">Aucune habitude dans cette catégorie</p>`;
     return;
   }
 
+  const existingCards = new Map();
+  container.querySelectorAll('.habit-card').forEach(card => {
+    existingCards.set(card.dataset.id, card);
+  });
+
   habitsList.forEach(habit => {
-    const val  = getLogForDate(habit.id, selectedDate);
+    const val = getLogForDate(habit.id, selectedDate);
     const goal = habit.goal || 1;
-    const done = isHabitDoneOnDate(habit, selectedDate);
     const { current, best } = calculateStreak(habit.id, habit.type, goal);
 
-    const streakLabel = current > 0
-        ? `🔥 ${current}j${best !== current ? ` · max ${best}j` : ''}`
-        : (best > 0 ? `max ${best}j` : '');
+    let cardElement = existingCards.get(habit.id);
+    const newCard = createHabitCardElement(habit, isPast, val, goal, current, best);
 
-    const card = document.createElement('div');
-    card.className = `habit-card${done ? ' completed' : ''}${isPast ? ' past-view' : ''}`;
-    card.style.setProperty('--habit-color', habit.color);
-
-    if (habit.type === 'check') {
-      card.innerHTML = `
-        <div class="habit-info">
-          <div class="habit-name">${escHtml(habit.name)}</div>
-          <div class="habit-meta">
-            <span class="streak-badge ${current > 2 ? 'hot' : ''}">${streakLabel}</span>
-          </div>
-        </div>
-        <div class="habit-actions">
-          ${!isPast ? `
-            <button class="edit-btn" data-id="${habit.id}" title="Modifier">✎</button>
-            <button class="del-btn"  data-id="${habit.id}" title="Supprimer">🗑</button>
-          ` : ''}
-          <button class="check-btn ${done ? 'done' : ''}" data-id="${habit.id}"
-            style="border-color:${habit.color};${done ? `background:${habit.color}` : ''}">
-            ${done ? '✓' : ''}
-          </button>
-        </div>`;
+    if (cardElement) {
+      cardElement.innerHTML = newCard.innerHTML;
+      cardElement.className = newCard.className;
+      cardElement.style.setProperty('--habit-color', habit.color);
+      existingCards.delete(habit.id);
     } else {
-      const count = typeof val === 'number' ? val : 0;
-      card.innerHTML = `
-        <div class="habit-info">
-          <div class="habit-name">${escHtml(habit.name)}</div>
-          <div class="habit-meta">
-            <span class="streak-badge ${current > 2 ? 'hot' : ''}">${streakLabel}</span>
-          </div>
-        </div>
-        <div class="habit-actions">
-          ${!isPast ? `
-            <button class="edit-btn" data-id="${habit.id}" title="Modifier">✎</button>
-            <button class="del-btn"  data-id="${habit.id}" title="Supprimer">🗑</button>
-          ` : ''}
-          <div class="counter-wrap">
-            <button class="counter-btn counter-dec" data-id="${habit.id}">−</button>
-            <span class="counter-val ${done ? 'goal-met' : ''}" style="${done ? `color:${habit.color}` : ''}">${count}/${goal}</span>
-            <button class="counter-btn counter-inc" data-id="${habit.id}">+</button>
-          </div>
-        </div>`;
+      cardElement = newCard;
+      container.appendChild(cardElement);
     }
-    container.appendChild(card);
+    attachHabitCardEventListeners(cardElement, habit.id);
   });
 
-  // Events
-  container.querySelectorAll('.check-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!isToday(selectedDate)) return;
-      const cur = getLogForDate(btn.dataset.id, selectedDate);
-      await setLog(btn.dataset.id, cur === true ? false : true, selectedDate);
+  existingCards.forEach(card => card.remove());
+}
+
+function createHabitCardElement(habit, isPast, val, goal, current, best) {
+  const done = isHabitDoneOnDate(habit, selectedDate);
+  const streakLabel = current > 0
+    ? `🔥 ${current}j${best !== current ? ` · max ${best}j` : ''}`
+    : (best > 0 ? `max ${best}j` : '');
+
+  const card = document.createElement('div');
+  card.className = `habit-card${done ? ' completed' : ''}${isPast ? ' past-view' : ''}`;
+  card.style.setProperty('--habit-color', habit.color);
+  card.dataset.id = habit.id;
+
+  if (habit.type === 'check') {
+    card.innerHTML = `
+      <div class="habit-info">
+        <div class="habit-name">${escHtml(habit.name)}</div>
+        <div class="habit-meta">
+          <span class="streak-badge ${current > 2 ? 'hot' : ''}">${streakLabel}</span>
+        </div>
+      </div>
+      <div class="habit-actions">
+        ${!isPast ? `
+          <button class="edit-btn" data-id="${habit.id}" title="Modifier">✎</button>
+          <button class="del-btn"  data-id="${habit.id}" title="Supprimer">🗑</button>
+        ` : ''}
+        <button class="check-btn ${done ? 'done' : ''}" data-id="${habit.id}"
+          style="border-color:${habit.color};${done ? `background:${habit.color}` : ''}">
+          ${done ? '✓' : ''}
+        </button>
+      </div>`;
+  } else {
+    const count = typeof val === 'number' ? val : 0;
+    card.innerHTML = `
+      <div class="habit-info">
+        <div class="habit-name">${escHtml(habit.name)}</div>
+        <div class="habit-meta">
+          <span class="streak-badge ${current > 2 ? 'hot' : ''}">${streakLabel}</span>
+        </div>
+      </div>
+      <div class="habit-actions">
+        ${!isPast ? `
+          <button class="edit-btn" data-id="${habit.id}" title="Modifier">✎</button>
+          <button class="del-btn"  data-id="${habit.id}" title="Supprimer">🗑</button>
+        ` : ''}
+        <div class="counter-wrap">
+          <button class="counter-btn counter-dec" data-id="${habit.id}">−</button>
+          <span class="counter-val ${done ? 'goal-met' : ''}" style="${done ? `color:${habit.color}` : ''}">${count}/${goal}</span>
+          <button class="counter-btn counter-inc" data-id="${habit.id}">+</button>
+        </div>
+      </div>`;
+  }
+  return card;
+}
+
+function attachHabitCardEventListeners(card, habitId) {
+  const isPast = !isToday(selectedDate);
+
+  card.querySelector('.check-btn')?.addEventListener('click', async () => {
+    if (isPast) return;
+    const cur = getLogForDate(habitId, selectedDate);
+    const next = cur === true ? false : true;
+    try {
+      if (!logs[selectedDate]) logs[selectedDate] = {};
+      logs[selectedDate][habitId] = next;
+      refreshHabitChange(habitId, selectedDate);
+      await setLog(habitId, next, selectedDate);
+    } catch (err) {
+      showToast('Erreur lors de la mise à jour.');
+      console.error(err);
       await loadData();
       refreshAll();
-    });
+    }
   });
 
-  container.querySelectorAll('.counter-inc').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!isToday(selectedDate)) return;
-      const cur = typeof getLogForDate(btn.dataset.id, selectedDate) === 'number' ? getLogForDate(btn.dataset.id, selectedDate) : 0;
-      await setLog(btn.dataset.id, cur + 1, selectedDate);
+  card.querySelector('.counter-inc')?.addEventListener('click', async () => {
+    if (isPast) return;
+    const cur = typeof getLogForDate(habitId, selectedDate) === 'number' ? getLogForDate(habitId, selectedDate) : 0;
+    const next = cur + 1;
+    try {
+      if (!logs[selectedDate]) logs[selectedDate] = {};
+      logs[selectedDate][habitId] = next;
+      refreshHabitChange(habitId, selectedDate);
+      await setLog(habitId, next, selectedDate);
+    } catch (err) {
+      showToast('Erreur lors de la mise à jour.');
+      console.error(err);
       await loadData();
       refreshAll();
-    });
+    }
   });
 
-  container.querySelectorAll('.counter-dec').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!isToday(selectedDate)) return;
-      const cur = typeof getLogForDate(btn.dataset.id, selectedDate) === 'number' ? getLogForDate(btn.dataset.id, selectedDate) : 0;
-      if (cur > 0) {
-        await setLog(btn.dataset.id, cur - 1, selectedDate);
-        await loadData();
-        refreshAll();
-      }
-    });
-  });
-
-  container.querySelectorAll('.edit-btn').forEach(btn => {
-    btn.addEventListener('click', () => openModal(btn.dataset.id));
-  });
-
-  container.querySelectorAll('.del-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!confirm('Supprimer cette habitude et toutes ses données ?')) return;
+  card.querySelector('.counter-dec')?.addEventListener('click', async () => {
+    if (isPast) return;
+    const cur = typeof getLogForDate(habitId, selectedDate) === 'number' ? getLogForDate(habitId, selectedDate) : 0;
+    if (cur > 0) {
+      const next = cur - 1;
       try {
-        await deleteHabit(btn.dataset.id);
-        showToast('Habitude supprimée');
+        if (!logs[selectedDate]) logs[selectedDate] = {};
+        logs[selectedDate][habitId] = next;
+        refreshHabitChange(habitId, selectedDate);
+        await setLog(habitId, next, selectedDate);
+      } catch (err) {
+        showToast('Erreur lors de la mise à jour.');
+        console.error(err);
         await loadData();
         refreshAll();
-      } catch (err) {
-        showToast('Erreur lors de la suppression');
       }
-    });
+    }
+  });
+
+  card.querySelector('.edit-btn')?.addEventListener('click', () => openModal(habitId));
+
+  card.querySelector('.del-btn')?.addEventListener('click', async () => {
+    if (!confirm('Supprimer cette habitude et toutes ses données ?')) return;
+    try {
+      await deleteHabit(habitId);
+      showToast('Habitude supprimée');
+      await loadData();
+      refreshAll();
+    } catch (err) {
+      showToast('Erreur lors de la suppression');
+      console.error(err);
+    }
   });
 }
 
 function updateStats() {
-  const isMobile       = window.innerWidth < 960;
-  const statsSection   = document.getElementById(isMobile ? 'statsSectionMobile'   : 'statsSection');
-  const grid           = document.getElementById(isMobile ? 'statsGridMobile'       : 'statsGrid');
+  const isMobile = window.innerWidth < 960;
+  const statsSection = document.getElementById(isMobile ? 'statsSectionMobile' : 'statsSection');
+  const grid = document.getElementById(isMobile ? 'statsGridMobile' : 'statsGrid');
 
   if (!statsSection || habits.length === 0) {
     if (statsSection) statsSection.style.display = 'none';
     return;
   }
-  statsSection.style.display   = '';
+  statsSection.style.display = '';
   grid.innerHTML = '';
+  habits.forEach(habit => updateHabitStat(habit.id));
+}
 
-  habits.forEach(habit => {
-    const days = [], labels = [];
-    for (let i = 6; i >= 0; i--) {
-      const dateStr = offsetDate(-i);
-      days.push(isHabitDoneOnDate(habit, dateStr) ? 1 : 0);
-      const d = new Date(dateStr + 'T00:00:00');
-      labels.push(d.toLocaleDateString('fr-FR', { weekday: 'short' }).slice(0, 2));
-    }
+function updateHabitStat(habitId) {
+  const isMobile = window.innerWidth < 960;
+  const grid = document.getElementById(isMobile ? 'statsGridMobile' : 'statsGrid');
+  if (!grid) return;
 
-    const pct  = Math.round((days.filter(Boolean).length / 7) * 100);
-    const card = document.createElement('div');
+  const habit = habits.find(h => h.id === habitId);
+  if (!habit) return;
+
+  const days = [], labels = [];
+  for (let i = 6; i >= 0; i--) {
+    const dateStr = offsetDate(-i);
+    days.push(isHabitDoneOnDate(habit, dateStr) ? 1 : 0);
+    const d = new Date(dateStr + 'T00:00:00');
+    labels.push(d.toLocaleDateString('fr-FR', { weekday: 'short' }).slice(0, 2));
+  }
+
+  const pct = Math.round((days.filter(Boolean).length / 7) * 100);
+  let card = grid.querySelector(`.stat-card[data-habit-id="${habitId}"]`);
+  
+  if (!card) {
+    card = document.createElement('div');
     card.className = 'stat-card';
-    card.style.setProperty('--habit-color', habit.color);
-    card.innerHTML = `
-      <div class="stat-card-header">
-        <div class="stat-name">${escHtml(habit.name)}</div>
-        <div class="stat-pct">${pct}%</div>
-      </div>
-      <div class="stat-bar-bg">
-        <div class="stat-bar-fill" style="width:${pct}%;background:${habit.color}"></div>
-      </div>
-      <canvas class="stat-mini-canvas" id="canvas_${habit.id}" height="40"></canvas>`;
+    card.dataset.habitId = habitId;
     grid.appendChild(card);
+  }
 
-    requestAnimationFrame(() => {
-      drawMiniChart(document.getElementById(`canvas_${habit.id}`), days, labels, habit.color);
-    });
+  card.style.setProperty('--habit-color', habit.color);
+  card.innerHTML = `
+    <div class="stat-card-header">
+      <div class="stat-name">${escHtml(habit.name)}</div>
+      <div class="stat-pct">${pct}%</div>
+    </div>
+    <div class="stat-bar-bg">
+      <div class="stat-bar-fill" style="width:${pct}%;background:${habit.color}"></div>
+    </div>
+    <canvas class="stat-mini-canvas" id="canvas_${habit.id}" height="40"></canvas>`;
+
+  requestAnimationFrame(() => {
+    drawMiniChart(document.getElementById(`canvas_${habit.id}`), days, labels, habit.color);
   });
 }
 
 function drawMiniChart(canvas, data, labels, color) {
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
-  const w   = canvas.offsetWidth;
-  const h   = 40;
-  canvas.width  = w * dpr;
+  const w = canvas.offsetWidth || 150;
+  const h = 40;
+  canvas.width = w * dpr;
   canvas.height = h * dpr;
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
@@ -409,8 +530,8 @@ function drawMiniChart(canvas, data, labels, color) {
 // MODALS
 // =============================================
 function openModal(editId = null) {
-  editingId        = editId;
-  const title   = document.getElementById('modalTitle');
+  editingId = editId;
+  const title = document.getElementById('modalTitle');
   const nameInp = document.getElementById('habitName');
   const goalInp = document.getElementById('counterGoal');
 
@@ -418,18 +539,18 @@ function openModal(editId = null) {
     const h = habits.find(h => h.id === editId);
     if (!h) return;
     title.textContent = "Modifier l'habitude";
-    nameInp.value     = h.name;
-    selectedColor     = h.color;
-    selectedType      = h.type;
-    selectedCategory  = h.category_id || null;
-    goalInp.value     = h.goal || 1;
+    nameInp.value = h.name;
+    selectedColor = h.color;
+    selectedType = h.type;
+    selectedCategory = h.category_id || null;
+    goalInp.value = h.goal || 1;
   } else {
     title.textContent = 'Nouvelle habitude';
-    nameInp.value     = '';
-    goalInp.value     = 1;
-    selectedColor     = '#FF6B6B';
-    selectedType      = 'check';
-    selectedCategory  = null;
+    nameInp.value = '';
+    goalInp.value = 1;
+    selectedColor = '#FF6B6B';
+    selectedType = 'check';
+    selectedCategory = null;
   }
 
   syncTypeButtons();
@@ -446,14 +567,14 @@ function closeModal() {
 
 function syncTypeButtons() {
   document.querySelectorAll('.type-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.type === selectedType));
+    b.classList.toggle('active', b.dataset.type === selectedType));
   document.getElementById('counterGoalGroup').style.display =
-      selectedType === 'counter' ? '' : 'none';
+    selectedType === 'counter' ? '' : 'none';
 }
 
 function syncColorSwatches() {
   document.querySelectorAll('.color-swatch').forEach(s =>
-      s.classList.toggle('active', s.dataset.color === selectedColor));
+    s.classList.toggle('active', s.dataset.color === selectedColor));
 }
 
 function syncCategoryPicker() {
@@ -606,7 +727,8 @@ async function startApp() {
 
   const { data: { user } } = await supabaseClient.auth.getUser();
   if (user) {
-    const parts = user.email.split('@')[0].split('.');
+    const email = user.email || "";
+    const parts = email.split('@')[0].split('.');
     const initials = parts.length >= 2
         ? parts[0][0].toUpperCase() + parts[1][0].toUpperCase()
         : parts[0].slice(0, 2).toUpperCase();
